@@ -40,6 +40,8 @@ Many, but you probably already have most of these...
 - [ ] Fractional scaling (how? Wayland only allows integer scales for buffers)
 - [ ] Generate the protocol headers & code during build
 - [ ] Audio level meters, like `pavucontrol`
+- [ ] PipeWire (or Jack?) support
 ## License?
 Unlicense. See the file `UNLICENSE` for the full text, or https://unlicense.org
+
 The files in the `protocol` directory have different licenses though!

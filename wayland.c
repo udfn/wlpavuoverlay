@@ -96,6 +96,7 @@ static void handle_global_add(void *data, struct wl_registry *reg,
 		state->layer_shell = wl_registry_bind(reg,name,&zwlr_layer_shell_v1_interface, version);
 	} else if (strcmp(interface,xdg_wm_base_interface.name) == 0) {
 		state->xdg_wm_base = wl_registry_bind(reg, name, &xdg_wm_base_interface, version);
+		xdg_wm_base_add_listener(state->xdg_wm_base, &wm_base_listener, state);
 	} else if (strcmp(interface,wl_seat_interface.name) == 0) {
 		struct wl_seat *newseat = wl_registry_bind(reg, name, &wl_seat_interface, version);
 		wlpavuo_seat_create(newseat, state);
@@ -152,9 +153,6 @@ char wlpavuo_wayland_init(struct wlpavuo_state *state) {
 	wl_list_init(&state->surfaces);
 	wl_registry_add_listener(state->registry, &reg_listener, state);
 	wl_display_roundtrip(state->display);
-	if (state->xdg_wm_base) {
-		xdg_wm_base_add_listener(state->xdg_wm_base, &wm_base_listener, state);
-	}
 	return 0;
 }
 
