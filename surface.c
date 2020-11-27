@@ -294,6 +294,7 @@ void wlpavuo_surface_swapbuffers(struct wlpavuo_surface *surface) {
 		surface->shm->buffer = wl_shm_pool_create_buffer(surface->shm->pool, 0, scaled_width,scaled_height, surface->shm->stride, WL_SHM_FORMAT_ARGB8888);
 		wl_surface_attach(surface->wl.surface, surface->shm->buffer, 0,0);
 		wl_surface_damage(surface->wl.surface, 0,0, scaled_width,scaled_height);
+		wl_surface_commit(surface->wl.surface);
 	} else {
 		cairo_gl_surface_swapbuffers(surface->cairo_surface);
 	}

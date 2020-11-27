@@ -46,7 +46,7 @@ typedef void (*wlpavuo_surface_input_keyboard_t)(struct wlpavuo_surface *surface
 
 struct wlpavuo_surface {
 	struct wl_list link; // link for wlpavuo_state
-	struct wl_list sublink; // subsurface linkk
+	struct wl_list sublink; // subsurface link
 	struct wlpavuo_state *state;
 	struct {
 		struct wl_surface *surface;
@@ -101,4 +101,5 @@ void wlpavuo_surface_add_subsurface(struct wlpavuo_surface *parent, struct wlpav
 
 char wlpavuo_surface_role_layershell(struct wlpavuo_surface *surface, struct wl_output *output, uint32_t layer);
 char wlpavuo_surface_role_toplevel(struct wlpavuo_surface *surface);
+
 #endif

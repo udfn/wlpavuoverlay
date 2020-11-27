@@ -89,4 +89,5 @@ struct wlpavuo_keyboard_event {
 void wlpavuo_seat_create(struct wl_seat *wlseat, struct wlpavuo_state *state);
 void wlpavuo_seat_destroy(struct wlpavuo_seat *seat);
 void wlpavuo_seat_clear_focus(struct wlpavuo_surface *surface);
+
 #endif

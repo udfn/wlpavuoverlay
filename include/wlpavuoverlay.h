@@ -6,6 +6,7 @@
 #include <cairo/cairo.h>
 #include <wayland-util.h>
 #include "seat.h"
+
 struct wlpavuo_state {
 	struct wl_display *display;
 	struct wl_registry *registry;
