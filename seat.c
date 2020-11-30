@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include <wayland-client.h>
 #include <wayland-cursor.h>
 #include <linux/input-event-codes.h>
@@ -405,9 +406,7 @@ static void handle_seat_capabilities(void *data, struct wl_seat *seat, uint32_t 
 static void handle_seat_name(void *data, struct wl_seat *seat, const char *name) {
 	UNUSED(seat);
 	struct wlpavuo_seat *wlpseat = (struct wlpavuo_seat*)data;
-	int len = strlen(name);
-	wlpseat->name = malloc(sizeof(char)*len+1);
-	strncpy(wlpseat->name,name,len);
+	wlpseat->name = strdup(name);
 }
 
 static const struct wl_seat_listener seat_listener = {

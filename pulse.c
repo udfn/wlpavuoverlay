@@ -1,7 +1,8 @@
+#define _POSIX_C_SOURCE 200809L
 #include <pulse/pulseaudio.h>
 #include <stdio.h>
+#include <string.h>
 #include "pulse.h"
-#include "string.h"
 #define UNUSED(x) (void)(x)
 
 struct wlpavuo_pulse_state {
@@ -65,11 +66,9 @@ static void handle_sink_input_info(pa_context *c, const pa_sink_input_info *i, i
 			stream = calloc(1,sizeof(struct wlpavuo_pulse_client_stream));
 			stream->id = i->index;
 			if (i->name) {
-				stream->name = malloc(strlen(i->name)*sizeof(char)+1);
-				strcpy(stream->name, i->name);
+				stream->name = strdup(i->name);
 			} else {
-				stream->name = malloc(sizeof(char)*18);
-				strcpy(stream->name,"<unnamed stream>");
+				stream->name = strdup("<unnamed stream>");
 			}
 			client->streams_count++;
 			wl_list_insert(&client->streams, &stream->link);
@@ -90,9 +89,8 @@ static void handle_client_info(pa_context *c, const pa_client_info *i, int eol, 
 		if (!client) {
 			client = calloc(1,sizeof(struct wlpavuo_pulse_client));
 			client->id = i->index;
-			client->name = malloc(strlen(i->name)*sizeof(char)+1);
+			client->name = strdup(i->name);
 			wl_list_init(&client->streams);
-			strcpy(client->name, i->name);
 			wl_list_insert(&pulse_state.clients, &client->link);
 		}
 	} else {
@@ -108,8 +106,7 @@ static void handle_sink_info(pa_context *c, const pa_sink_info *i, int eol, void
 		if (!sink) {
 			sink = calloc(1,sizeof(struct wlpavuo_pulse_sink));
 			sink->id = i->index;
-			sink->name = malloc(strlen(i->description)*sizeof(char)+1);
-			strcpy(sink->name, i->description);
+			sink->name = strdup(i->description);
 			wl_list_insert(&pulse_state.sinks, &sink->link);
 		}
 		sink->channels = i->volume.channels;
