@@ -120,6 +120,7 @@ static void surface_render_set_shm(struct wlpavuo_surface *surface) {
 	surface->render.impl.applysize = allocate_wl_shm_pool;
 	surface->render.impl.swapbuffers = shm_surface_swapbuffers;
 }
+
 struct wlpavuo_surface_egl {
 	struct wl_egl_window *window;
 	EGLSurface surface;
@@ -256,7 +257,6 @@ struct wlpavuo_surface *wlpavuo_surface_create(struct wlpavuo_state *state, char
 	wl_list_init(&newsurf->outputs);
 	wl_list_insert(&state->surfaces, &newsurf->link);
 	wl_surface_set_user_data(newsurf->wl.surface, newsurf);
-	wl_surface_set_buffer_scale(newsurf->wl.surface, newsurf->scale);
 	wl_surface_add_listener(newsurf->wl.surface, &surface_listener, newsurf);
 	if (renderer == WLPAVUO_SURFACE_RENDER_SHM) {
 		surface_render_set_shm(newsurf);
