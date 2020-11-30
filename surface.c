@@ -156,6 +156,15 @@ static void surface_render_set_egl(struct wlpavuo_surface *surface) {
 	if (surface->render.data) {
 		surface->render.impl.destroy(surface);
 	}
+	if (surface->state->egl.inited == 2) {
+		surface_render_set_shm(surface);
+		return;
+	} else if (surface->state->egl.inited == 0) {
+		if (!wlpavuoverlay_egl_try_init(surface->state)) {
+			surface_render_set_shm(surface);
+			return;
+		}
+	}
 	surface->render.data = calloc(sizeof(struct wlpavuo_surface_egl),1);
 	surface->render.impl.destroy = egl_surface_destroy;
 	surface->render.impl.applysize = egl_surface_applysize;
@@ -249,27 +258,6 @@ struct wlpavuo_surface *wlpavuo_surface_create(struct wlpavuo_state *state, char
 	wl_surface_set_user_data(newsurf->wl.surface, newsurf);
 	wl_surface_set_buffer_scale(newsurf->wl.surface, newsurf->scale);
 	wl_surface_add_listener(newsurf->wl.surface, &surface_listener, newsurf);
-	if (renderer == WLPAVUO_SURFACE_RENDER_EGL) {
-		switch (state->egl.inited) {
-			case 2:
-				renderer = WLPAVUO_SURFACE_RENDER_SHM;
-				break;
-			case 1:
-				break;
-			case 0:
-			{
-				if (wlpavuoverlay_egl_init(state)) {
-					state->egl.inited = 2;
-					wlpavuoverlay_egl_uninit(state);
-				}
-				else if (cairo_device_status(state->egl.cairo_dev) != CAIRO_STATUS_SUCCESS) {
-					fprintf(stderr,"couldn't get Cairo device status %i\n",cairo_device_status(state->egl.cairo_dev));
-					renderer = WLPAVUO_SURFACE_RENDER_SHM;
-				}
-			}
-		}
-	}
-	// Uh.. what's up with that switch up there?
 	if (renderer == WLPAVUO_SURFACE_RENDER_SHM) {
 		surface_render_set_shm(newsurf);
 	} else {

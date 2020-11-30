@@ -44,7 +44,8 @@ struct wlpavuo_output {
 char wlpavuo_wayland_init(struct wlpavuo_state *state);
 void wlpavuo_wayland_uninit(struct wlpavuo_state *state);
 void wlpavuo_wayland_run(struct wlpavuo_state *state);
-char wlpavuoverlay_egl_init(struct wlpavuo_state *state);
+// To be very inconsistent, this returns true on success..
+bool wlpavuoverlay_egl_try_init(struct wlpavuo_state *state);
 void wlpavuoverlay_egl_uninit(struct wlpavuo_state *state);
 
 #endif
