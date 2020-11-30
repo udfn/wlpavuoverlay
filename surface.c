@@ -57,36 +57,110 @@ static int allocate_shm_file(size_t size) {
 	return fd;
 }
 
-static void destroy_shm_pool(struct wlpavuo_surface *surface) {
-	wl_shm_pool_destroy(surface->shm->pool);
-	munmap(surface->shm->data, surface->shm->size);
-	close(surface->shm->fd);
-	cairo_surface_destroy(surface->cairo_surface);
+struct wlpavuo_surface_shm {
+	int fd;
+	uint8_t *data;
+	struct wl_shm_pool *pool;
+	size_t size;
+	int32_t stride;
+	char *name;
+	struct wl_buffer *buffer;
+};
+
+static void destroy_shm_pool(struct wlpavuo_surface_shm *shm) {
+	wl_shm_pool_destroy(shm->pool);
+	munmap(shm->data, shm->size);
+	close(shm->fd);
 }
 
 static void allocate_wl_shm_pool(struct wlpavuo_surface *surface) {
+	struct wlpavuo_surface_shm *shm = surface->render.data;
 	uint32_t scaled_width = surface->width * surface->scale;
 	uint32_t scaled_height = surface->height * surface->scale;
 	int stride = cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, scaled_width);
-	surface->shm->stride = stride;
+	shm->stride = stride;
 	int pool_size = scaled_height * stride * 2;
-	if (surface->shm->fd) {
-		destroy_shm_pool(surface);
+	if (shm->fd) {
+		destroy_shm_pool(shm);
 	}
 	int fd = allocate_shm_file(pool_size);
-	surface->shm->fd = fd;
-	surface->shm->data = mmap(NULL,pool_size,PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
-	surface->shm->pool = wl_shm_create_pool(surface->state->shm, fd, pool_size);
-	surface->cairo_surface = cairo_image_surface_create_for_data(surface->shm->data,CAIRO_FORMAT_ARGB32,scaled_width,scaled_height,stride);
+	shm->fd = fd;
+	shm->data = mmap(NULL,pool_size,PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
+	shm->pool = wl_shm_create_pool(surface->state->shm, fd, pool_size);
+	surface->cairo_surface = cairo_image_surface_create_for_data(shm->data,CAIRO_FORMAT_ARGB32,scaled_width,scaled_height,stride);
 	return;
 }
 
-static void surface_egl_init(struct wlpavuo_surface *surf) {
-	uint32_t scaled_width = surf->width * surf->scale;
-	uint32_t scaled_height = surf->height * surf->scale;
-	surf->egl.window = wl_egl_window_create(surf->wl.surface, scaled_width, scaled_height);
-	surf->egl.surface = eglCreatePlatformWindowSurfaceEXT(surf->state->egl.display, surf->state->egl.config, surf->egl.window, NULL);
-	surf->cairo_surface = cairo_gl_surface_create_for_egl(surf->state->egl.cairo_dev, surf->egl.surface, scaled_width,scaled_height);
+static void shm_surface_destroy(struct wlpavuo_surface *surface) {
+	struct wlpavuo_surface_shm *shm = surface->render.data;
+	cairo_surface_destroy(surface->cairo_surface);
+	destroy_shm_pool(shm);
+	free(surface->render.data);
+}
+
+static void shm_surface_swapbuffers(struct wlpavuo_surface *surface) {
+	struct wlpavuo_surface_shm *shm = surface->render.data;
+	if (shm->buffer) {
+		wl_buffer_destroy(shm->buffer);
+	}
+	uint32_t scaled_width = surface->width*surface->scale;
+	uint32_t scaled_height = surface->height*surface->scale;
+	shm->buffer = wl_shm_pool_create_buffer(shm->pool, 0, scaled_width,scaled_height, shm->stride, WL_SHM_FORMAT_ARGB8888);
+	wl_surface_attach(surface->wl.surface, shm->buffer, 0,0);
+	wl_surface_damage(surface->wl.surface, 0,0, scaled_width,scaled_height);
+	wl_surface_commit(surface->wl.surface);
+}
+
+static void surface_render_set_shm(struct wlpavuo_surface *surface) {
+	if (surface->render.data) {
+		surface->render.impl.destroy(surface);
+	}
+	surface->render.data = calloc(sizeof(struct wlpavuo_surface_shm),1);
+	surface->render.impl.destroy = shm_surface_destroy;
+	surface->render.impl.applysize = allocate_wl_shm_pool;
+	surface->render.impl.swapbuffers = shm_surface_swapbuffers;
+}
+struct wlpavuo_surface_egl {
+	struct wl_egl_window *window;
+	EGLSurface surface;
+};
+
+static void egl_surface_destroy(struct wlpavuo_surface *surface) {
+	struct wlpavuo_surface_egl *egl = surface->render.data;
+	cairo_surface_destroy(surface->cairo_surface);
+	wl_egl_window_destroy(egl->window);
+	eglDestroySurface(surface->state->egl.display, egl->surface);
+	free(surface->render.data);
+}
+
+static void egl_surface_applysize(struct wlpavuo_surface *surface) {
+	struct wlpavuo_surface_egl *egl = surface->render.data;
+	uint32_t scaled_width = surface->width * surface->scale;
+	uint32_t scaled_height = surface->height * surface->scale;
+	if (!egl->window) {
+		struct wlpavuo_surface_egl *egl = surface->render.data;
+		egl->window = wl_egl_window_create(surface->wl.surface, scaled_width, scaled_height);
+		egl->surface = eglCreatePlatformWindowSurfaceEXT(surface->state->egl.display, surface->state->egl.config, egl->window, NULL);
+		surface->cairo_surface = cairo_gl_surface_create_for_egl(surface->state->egl.cairo_dev, egl->surface, scaled_width,scaled_height);
+	} else {
+		wl_egl_window_resize(egl->window, scaled_width,scaled_height,0,0);
+		cairo_gl_surface_set_size(surface->cairo_surface, scaled_width,scaled_height);
+	}
+}
+
+static void egl_surface_swapbuffers(struct wlpavuo_surface *surface) {
+	cairo_gl_surface_swapbuffers(surface->cairo_surface);
+}
+
+static void surface_render_set_egl(struct wlpavuo_surface *surface) {
+	if (surface->render.data) {
+		surface->render.impl.destroy(surface);
+	}
+	surface->render.data = calloc(sizeof(struct wlpavuo_surface_egl),1);
+	surface->render.impl.destroy = egl_surface_destroy;
+	surface->render.impl.applysize = egl_surface_applysize;
+	surface->render.impl.swapbuffers = egl_surface_swapbuffers;
+
 }
 
 struct wl_callback_listener callback_listener;
@@ -195,8 +269,11 @@ struct wlpavuo_surface *wlpavuo_surface_create(struct wlpavuo_state *state, char
 			}
 		}
 	}
+	// Uh.. what's up with that switch up there?
 	if (renderer == WLPAVUO_SURFACE_RENDER_SHM) {
-		newsurf->shm = calloc(1,sizeof(struct wlpavuo_surface_shm));
+		surface_render_set_shm(newsurf);
+	} else {
+		surface_render_set_egl(newsurf);
 	}
 	state->num_surfaces++;
 	return newsurf;
@@ -218,14 +295,7 @@ void wlpavuo_surface_destroy(struct wlpavuo_surface *surface) {
 	if (surface->impl.destroy) {
 		surface->impl.destroy(surface);
 	}
-	if (surface->shm) {
-		destroy_shm_pool(surface);
-		free(surface->shm);
-	} else {
-		cairo_surface_destroy(surface->cairo_surface);
-		wl_egl_window_destroy(surface->egl.window);
-		eglDestroySurface(surface->state->egl.display, surface->egl.surface);
-	}
+	surface->render.impl.destroy(surface);
 	struct wlpavuo_surface_output *surfoutput;
 	struct wlpavuo_surface_output *surfoutputtmp;
 	wl_list_for_each_safe(surfoutput, surfoutputtmp, &surface->outputs, link) {
@@ -266,16 +336,7 @@ void wlpavuo_surface_set_size(struct wlpavuo_surface *surface, uint32_t width, u
 
 void wlpavuo_surface_apply_size(struct wlpavuo_surface *surface) {
 	wl_surface_set_buffer_scale(surface->wl.surface, surface->scale);
-	if (surface->shm) {
-		allocate_wl_shm_pool(surface);
-	} else if (!surface->egl.window) {
-		surface_egl_init(surface);
-	} else {
-		uint32_t scaled_width = surface->width * surface->scale;
-		uint32_t scaled_height = surface->height * surface->scale;
-		wl_egl_window_resize(surface->egl.window, scaled_width,scaled_height,0,0);
-		cairo_gl_surface_set_size(surface->cairo_surface, scaled_width,scaled_height);
-	}
+	surface->render.impl.applysize(surface);
 	struct wlpavuo_surface *sub;
 	wl_list_for_each(sub, &surface->subsurfaces, sublink) {
 		sub->scale = surface->scale;
@@ -285,19 +346,7 @@ void wlpavuo_surface_apply_size(struct wlpavuo_surface *surface) {
 
 void wlpavuo_surface_swapbuffers(struct wlpavuo_surface *surface) {
 	surface->frame++;
-	if (surface->shm) {
-		if (surface->shm->buffer) {
-			wl_buffer_destroy(surface->shm->buffer);
-		}
-		uint32_t scaled_width = surface->width*surface->scale;
-		uint32_t scaled_height = surface->height*surface->scale;
-		surface->shm->buffer = wl_shm_pool_create_buffer(surface->shm->pool, 0, scaled_width,scaled_height, surface->shm->stride, WL_SHM_FORMAT_ARGB8888);
-		wl_surface_attach(surface->wl.surface, surface->shm->buffer, 0,0);
-		wl_surface_damage(surface->wl.surface, 0,0, scaled_width,scaled_height);
-		wl_surface_commit(surface->wl.surface);
-	} else {
-		cairo_gl_surface_swapbuffers(surface->cairo_surface);
-	}
+	surface->render.impl.swapbuffers(surface);
 }
 
 void wlpavuo_surface_set_need_draw(struct wlpavuo_surface *surface, bool render) {

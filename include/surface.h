@@ -8,16 +8,6 @@
 #include "seat.h"
 typedef void* EGLSurface;
 
-struct wlpavuo_surface_shm {
-	int fd;
-	uint8_t *data;
-	struct wl_shm_pool *pool;
-	size_t size;
-	int32_t stride;
-	char *name;
-	struct wl_buffer *buffer;
-};
-
 enum wlpavuo_surface_flags {
 	WLPAVUO_SURFACE_FLAG_NEEDS_DRAW = 1 << 0,
 	WLPAVUO_SURFACE_FLAG_CSD = 1 << 1,
@@ -44,6 +34,8 @@ typedef void (*wlpavuo_surface_configure_t)(struct wlpavuo_surface *surface, uin
 typedef void (*wlpavuo_surface_input_pointer_t)(struct wlpavuo_surface *surface, struct wlpavuo_pointer_event *event);
 typedef void (*wlpavuo_surface_input_keyboard_t)(struct wlpavuo_surface *surface, struct wlpavuo_keyboard_event *event);
 
+typedef void (*wlpavuo_surface_generic_func_t)(struct wlpavuo_surface *surface);
+
 struct wlpavuo_surface {
 	struct wl_list link; // link for wlpavuo_state
 	struct wl_list sublink; // subsurface link
@@ -59,11 +51,14 @@ struct wlpavuo_surface {
 		struct wl_callback *frame_cb;
 	} wl;
 	struct {
-		struct wl_egl_window *window;
-		EGLSurface surface;
-	} egl;
+		void *data;
+		struct {
+			wlpavuo_surface_generic_func_t swapbuffers;
+			wlpavuo_surface_generic_func_t applysize;
+			wlpavuo_surface_generic_func_t destroy;
+		} impl;
+	} render;
 	cairo_surface_t *cairo_surface;
-	struct wlpavuo_surface_shm *shm;
 	uint32_t width, height;
 	uint32_t desired_width, desired_height;
 	uint32_t actual_width, actual_height;
