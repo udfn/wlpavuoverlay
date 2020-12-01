@@ -156,13 +156,13 @@ static void wlpavuo_wayland_poll_display(struct wlpavuo_state *state) {
 		}
 		state->destroy_surfaces = 0;
 	}
-	wl_display_flush(state->display);
 }
 
 void wlpavuo_wayland_run(struct wlpavuo_state *state) {
 	wl_display_flush(state->display);
 	// Everything about this seems very flaky.. but it works!
 	while (state->num_surfaces) {
+		wl_display_flush(state->display);
 		int nfds = epoll_wait(state->poll->efd, state->poll->ev, state->poll->numfds, -1);
 		if (nfds == -1) {
 			perror("error while polling");
