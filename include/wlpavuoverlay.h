@@ -33,6 +33,7 @@ struct wlpavuo_state {
 	uint32_t cursor_theme_size;
 	uint32_t num_surfaces;
 	char destroy_surfaces;
+	struct wlpavuo_poll *poll;
 };
 
 struct wlpavuo_output {
@@ -44,6 +45,7 @@ struct wlpavuo_output {
 char wlpavuo_wayland_init(struct wlpavuo_state *state);
 void wlpavuo_wayland_uninit(struct wlpavuo_state *state);
 void wlpavuo_wayland_run(struct wlpavuo_state *state);
+void wlpavuo_add_seat_fd(struct wlpavuo_seat *seat);
 // To be very inconsistent, this returns true on success..
 bool wlpavuoverlay_egl_try_init(struct wlpavuo_state *state);
 void wlpavuoverlay_egl_uninit(struct wlpavuo_state *state);

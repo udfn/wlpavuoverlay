@@ -286,7 +286,14 @@ void do_volume_control(struct wlpavuo_surface *surface, struct nk_context *ctx,
 void do_keyboard_input(struct wlpavuo_ui *ui, struct nk_context *ctx, unsigned long *volume, int *mute, int *scroll) {
 	set_nk_color(&ctx->style.progress.normal.data.color,37,57,86,255);
 	set_nk_color(&ctx->style.progress.hover.data.color,37,57,86,255);
-	*volume += ui->input.adjust_vol;
+	if (((long)*volume + ui->input.adjust_vol) < 0) {
+		*volume = 0;
+	} else {
+		*volume += ui->input.adjust_vol;
+	}
+	if (*volume > 0x10000U) {
+		*volume = 0x10000U;
+	}
 	ui->input.adjust_vol = 0;
 	if (ui->input.mute_selected) {
 		*mute = !*mute;
@@ -310,7 +317,7 @@ void wlpavuo_ui_input_keyboard(struct wlpavuo_surface *surface, struct wlpavuo_k
 	}
 	// This stuff shouldn't depend on the interface rendering..
 	// It should also be rebindable..
-	if (event->type == WLPAVUO_KEYBOARD_EVENT_KEYDOWN) {
+	if (event->type == WLPAVUO_KEYBOARD_EVENT_KEYDOWN || event->type == WLPAVUO_KEYBOARD_EVENT_KEYREPEAT) {
 		switch (event->keysym) {
 			case XKB_KEY_h:
 				ui->input.adjust_vol -= 2500;

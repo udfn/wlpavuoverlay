@@ -4,12 +4,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/epoll.h>
+#include <unistd.h>
 #include "wlpavuoverlay.h"
 #include "surface.h"
 #include "wlr-layer-shell.h"
 #include "xdg-shell-client-protocol.h"
 #include "xdg-decoration-unstable-v1.h"
 #include "viewporter.h"
+
+struct wlpavuo_poll {
+	int efd;
+	int dfd;
+	int numfds;
+	struct epoll_event *ev;
+};
 
 static void handle_wm_ping(void *data, struct xdg_wm_base *xdg_wm_base, uint32_t serial) {
 	UNUSED(data);
@@ -126,17 +135,46 @@ static const struct wl_registry_listener reg_listener = {
 	handle_global_remove
 };
 
-void wlpavuo_wayland_run(struct wlpavuo_state *state) {
-	while (wl_display_dispatch(state->display) != -1 && state->num_surfaces) {
-		if (state->destroy_surfaces) {
-			struct wlpavuo_surface *surface;
-			struct wlpavuo_surface *surfacetmp;
-			wl_list_for_each_safe(surface, surfacetmp, &state->surfaces, link) {
-				if (surface->flags & WLPAVUO_SURFACE_FLAG_DESTROY) {
-					wlpavuo_surface_destroy(surface);
-				}
+void wlpavuo_add_seat_fd(struct wlpavuo_seat *seat) {
+	struct wlpavuo_state *state = seat->state;
+	state->poll->ev = realloc(state->poll->ev, sizeof(struct epoll_event)* ++state->poll->numfds);
+	struct epoll_event ep;
+	ep.data.ptr = seat;
+	ep.events = EPOLLIN;
+	epoll_ctl(state->poll->efd, EPOLL_CTL_ADD, seat->keyboard_repeat_fd, &ep);
+}
+
+static void wlpavuo_wayland_poll_display(struct wlpavuo_state *state) {
+	wl_display_dispatch(state->display);
+	if (state->destroy_surfaces) {
+		struct wlpavuo_surface *surface;
+		struct wlpavuo_surface *surfacetmp;
+		wl_list_for_each_safe(surface, surfacetmp, &state->surfaces, link) {
+			if (surface->flags & WLPAVUO_SURFACE_FLAG_DESTROY) {
+				wlpavuo_surface_destroy(surface);
 			}
-			state->destroy_surfaces = 0;
+		}
+		state->destroy_surfaces = 0;
+	}
+	wl_display_flush(state->display);
+}
+
+void wlpavuo_wayland_run(struct wlpavuo_state *state) {
+	wl_display_flush(state->display);
+	// Everything about this seems very flaky.. but it works!
+	while (state->num_surfaces) {
+		int nfds = epoll_wait(state->poll->efd, state->poll->ev, state->poll->numfds, -1);
+		if (nfds == -1) {
+			perror("error while polling");
+			wl_display_cancel_read(state->display);
+			return;
+		}
+		for (int i = 0; i < nfds;i++) {
+			if (state->poll->ev[i].data.fd == state->poll->dfd) {
+				wlpavuo_wayland_poll_display(state);
+			} else {
+				wlpavuo_seat_send_key_repeat(state->poll->ev[i].data.ptr);
+			}
 		}
 	}
 }
@@ -153,6 +191,15 @@ char wlpavuo_wayland_init(struct wlpavuo_state *state) {
 	wl_list_init(&state->surfaces);
 	wl_registry_add_listener(state->registry, &reg_listener, state);
 	wl_display_roundtrip(state->display);
+	state->poll = calloc(1,sizeof(struct wlpavuo_poll));
+	state->poll->efd = epoll_create1(0);
+	state->poll->ev = calloc(1,sizeof(struct epoll_event));
+	struct epoll_event ep = { 0 };
+	state->poll->dfd = wl_display_get_fd(state->display);
+	ep.data.fd = state->poll->dfd;
+	ep.events = EPOLLIN;
+	state->poll->numfds = 1;
+	epoll_ctl(state->poll->efd, EPOLL_CTL_ADD, state->poll->dfd, &ep);
 	return 0;
 }
 
@@ -181,4 +228,7 @@ void wlpavuo_wayland_uninit(struct wlpavuo_state *state) {
 		wl_cursor_theme_destroy(state->cursor_theme);
 	}
 	wl_display_disconnect(state->display);
+	free(state->poll->ev);
+	close(state->poll->efd);
+	free(state->poll);
 }

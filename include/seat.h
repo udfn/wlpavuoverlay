@@ -14,7 +14,9 @@ struct wlpavuo_seat {
 	struct wlpavuo_surface *keyboard_focus;
 	int32_t keyboard_repeat_rate;
 	int32_t keyboard_repeat_delay;
+	int keyboard_repeat_fd;
 	struct wlpavuo_keyboard_event *keyboard_event;
+
 	struct wl_touch *touch;
 	struct wlpavuo_surface *touch_focus;
 	uint32_t touch_serial;
@@ -72,10 +74,11 @@ struct wlpavuo_pointer_event {
 };
 
 enum wlpavuo_keyboard_event_type {
-	WLPAVUO_KEYBOARD_EVENT_FOCUS = 1 << 0,
-	WLPAVUO_KEYBOARD_EVENT_KEYDOWN = 1 << 1,
-	WLPAVUO_KEYBOARD_EVENT_KEYUP = 1 << 2,
-	WLPAVUO_KEYBOARD_EVENT_MODIFIERS = 1 << 3,
+	WLPAVUO_KEYBOARD_EVENT_FOCUS,
+	WLPAVUO_KEYBOARD_EVENT_KEYDOWN,
+	WLPAVUO_KEYBOARD_EVENT_KEYUP,
+	WLPAVUO_KEYBOARD_EVENT_KEYREPEAT,
+	WLPAVUO_KEYBOARD_EVENT_MODIFIERS,
 };
 
 struct wlpavuo_keyboard_event {
@@ -87,6 +90,7 @@ struct wlpavuo_keyboard_event {
 };
 
 void wlpavuo_seat_create(struct wl_seat *wlseat, struct wlpavuo_state *state);
+void wlpavuo_seat_send_key_repeat(struct wlpavuo_seat *seat);
 void wlpavuo_seat_destroy(struct wlpavuo_seat *seat);
 void wlpavuo_seat_clear_focus(struct wlpavuo_surface *surface);
 

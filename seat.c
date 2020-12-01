@@ -4,6 +4,7 @@
 #include <linux/input-event-codes.h>
 #include <stdlib.h>
 #include <sys/mman.h>
+#include <sys/timerfd.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -36,6 +37,15 @@ static void dispatch_keyboard_event(struct wlpavuo_keyboard_event *event, struct
 		surface->impl.input_keyboard(surface,event);
 	}
 	event->type = 0;
+}
+
+void wlpavuo_seat_send_key_repeat(struct wlpavuo_seat *seat) {
+	uint64_t expirations;
+	read(seat->keyboard_repeat_fd,&expirations,sizeof(uint64_t));
+	if (seat->keyboard_focus) {
+		seat->keyboard_event->type = WLPAVUO_KEYBOARD_EVENT_KEYREPEAT;
+		dispatch_keyboard_event(seat->keyboard_event,seat->keyboard_focus);
+	}
 }
 
 static void handle_keyboard_enter(
@@ -71,6 +81,8 @@ static void handle_keyboard_leave(
 	seat->keyboard_event->type = WLPAVUO_KEYBOARD_EVENT_FOCUS;
 	dispatch_keyboard_event(seat->keyboard_event, seat->keyboard_focus);
 	seat->keyboard_focus = NULL;
+	struct itimerspec timer = { 0 };
+	timerfd_settime(seat->keyboard_repeat_fd, 0, &timer, NULL);
 }
 
 static void handle_keyboard_key(
@@ -92,7 +104,12 @@ static void handle_keyboard_key(
 			WLPAVUO_KEYBOARD_EVENT_KEYDOWN : WLPAVUO_KEYBOARD_EVENT_KEYUP;
 	seat->keyboard_event->keysym = keysym;
 	dispatch_keyboard_event(seat->keyboard_event, seat->keyboard_focus);
-	// Hmm.. gotta do key repeat as well..
+	struct itimerspec timer = { 0 };
+	if (state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+		timer.it_value.tv_nsec = seat->keyboard_repeat_delay * 1000000;
+		timer.it_interval.tv_nsec = seat->keyboard_repeat_rate * 1000000;
+	}
+	timerfd_settime(seat->keyboard_repeat_fd, 0, &timer, NULL);
 }
 
 static void handle_keyboard_modifiers(
@@ -387,6 +404,8 @@ static void handle_seat_capabilities(void *data, struct wl_seat *seat, uint32_t 
 			wlpseat->state->keyboard_context = xkb_context_new(0);
 		}
 		wlpseat->keyboard_event = calloc(1,sizeof(struct wlpavuo_keyboard_event));
+		wlpseat->keyboard_repeat_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+		wlpavuo_add_seat_fd(wlpseat);
 		wl_keyboard_add_listener(wlpseat->keyboard, &keyboard_listener, data);
 	}
 	if (capabilities & WL_SEAT_CAPABILITY_POINTER) {
@@ -448,6 +467,8 @@ void wlpavuo_seat_destroy(struct wlpavuo_seat *seat) {
 	}
 	if (seat->keyboard_event) {
 		free(seat->keyboard_event);
+		close(seat->keyboard_repeat_fd);
+		// Should also stop polling the fd here..
 	}
 	wl_seat_destroy(seat->wl_seat);
 	free(seat);
