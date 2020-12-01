@@ -14,8 +14,8 @@ wlegl = dependency('wayland-egl')
 epoxy = dependency('epoxy')
 xkbc = dependency('xkbcommon')
 pulseaudio = dependency('libpulse')
-includes = include_directories(['include','protocol'])
-
+includes = include_directories(['include'])
+subdir('protocol')
 srcfiles = [
 	'main.c',
 	'egl.c',
@@ -24,11 +24,7 @@ srcfiles = [
 	'seat.c',
 	'shell.c',
 	'pulse.c',
-	'wayland.c',
-	'protocol/wlr-layer-shell.c',
-	'protocol/xdg-shell.c',
-	'protocol/xdg-decoration-unstable-v1.c',
-	'protocol/viewporter.c'
+	'wayland.c'
 ]
 deps = [
 	wayland_client,
@@ -41,7 +37,7 @@ deps = [
 	paper,
 	epoxy,
 	xkbc,
-	pulseaudio
+	pulseaudio,
 ]
 
-executable('wlpavuoverlay',srcfiles,dependencies: deps, include_directories:includes,install:true)
+executable('wlpavuoverlay',srcfiles,[proto_c,proto_h],dependencies: deps, include_directories:includes,install:true)

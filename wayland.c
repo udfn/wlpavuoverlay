@@ -8,8 +8,8 @@
 #include <unistd.h>
 #include "wlpavuoverlay.h"
 #include "surface.h"
-#include "wlr-layer-shell.h"
-#include "xdg-shell-client-protocol.h"
+#include "wlr-layer-shell-unstable-v1.h"
+#include "xdg-shell.h"
 #include "xdg-decoration-unstable-v1.h"
 #include "viewporter.h"
 

@@ -11,7 +11,7 @@
 #include "surface.h"
 #include "ui.h"
 #include "nuklear.h"
-#include "xdg-shell-client-protocol.h"
+#include "xdg-shell.h"
 #include "pulse.h"
 
 struct wlpavuo_ui {

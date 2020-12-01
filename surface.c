@@ -11,8 +11,8 @@
 #include <sys/mman.h>
 #include <time.h>
 #include <cairo/cairo-gl.h>
-#include "wlr-layer-shell.h"
-#include "xdg-shell-client-protocol.h"
+#include "wlr-layer-shell-unstable-v1.h"
+#include "xdg-shell.h"
 #include "wlpavuoverlay.h"
 #include "ui.h"
 #include "surface.h"
