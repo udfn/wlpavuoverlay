@@ -449,6 +449,7 @@ char wlpavuo_ui_run(struct wlpavuo_surface *surface, cairo_t *cr) {
 		surface->wl.layer_surface || surface->wl.subsurface ? NK_WINDOW_BORDER : 0;
 	int inset = winflags ? 1 : 0;
 	cairo_scale(cr, scale,scale);
+	nk_style_set_font(ctx, &ui->font);
 	if (nk_begin_titled(ctx, "mainwin", surface->title,nk_rect(inset,inset,
 			surface->width-(inset*2),surface->height-(inset*2)),
 			winflags)) {
