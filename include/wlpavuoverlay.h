@@ -34,6 +34,7 @@ struct wlpavuo_state {
 	uint32_t num_surfaces;
 	char destroy_surfaces;
 	struct wlpavuo_poll *poll;
+	bool use_pipewire;
 };
 
 struct wlpavuo_output {

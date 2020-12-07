@@ -414,7 +414,14 @@ char wlpavuo_ui_run(struct wlpavuo_surface *surface, cairo_t *cr) {
 		memcpy(ui->color_table, nk_default_color_style, sizeof(nk_default_color_style));
 		set_nk_color(&ui->color_table[NK_COLOR_WINDOW], 8,8,8,231);
 		nk_style_from_table(ui->context, ui->color_table);
-		ui->backend = wlpavuo_audio_get_pa();
+#ifdef HAVE_PIPEWIRE
+		if (surface->state->use_pipewire) {
+			ui->backend = wlpavuo_audio_get_pw();
+		} else
+#endif
+		{
+			ui->backend = wlpavuo_audio_get_pa();
+		}
 		ui->backend->set_update_callback(handle_audio_update,surface);
 	}
 	const struct wlpavuo_audio_impl *aimpl = ui->backend;

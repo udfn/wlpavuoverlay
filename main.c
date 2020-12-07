@@ -173,11 +173,13 @@ int main (int argc, char *argv[]) {
 	}
 	if (state.compositor) {
 		char mode = WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELL;
-		if (argc > 1) {
-			if (strcmp(argv[1], "dim") == 0) {
+		for (int i = 1; i < argc;i++) {
+			if (strcmp(argv[i], "dim") == 0) {
 				mode = WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELLFULL;
-			} else {
+			} else if (strcmp(argv[i], "xdg") == 0) {
 				mode = WLPAVUO_SURFACE_LAYER_MODE_XDGSHELL;
+			} else if (strcmp(argv[i], "pw") == 0) {
+				state.use_pipewire = true;
 			}
 		}
 		create_surface(&state, mode);
