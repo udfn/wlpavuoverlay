@@ -14,7 +14,8 @@
 enum pipewire_global_type {
 	PIPEWIRE_GLOBAL_TYPE_CLIENT,
 	PIPEWIRE_GLOBAL_TYPE_SINK,
-	PIPEWIRE_GLOBAL_TYPE_CLIENT_STREAM
+	PIPEWIRE_GLOBAL_TYPE_CLIENT_STREAM,
+	PIPEWIRE_GLOBAL_TYPE_DEVICE
 };
 
 struct pipewire_global {
@@ -26,9 +27,14 @@ struct pipewire_global {
 	struct pw_proxy *proxy; // But is it actually a proxy?
 };
 
-struct pipewire_global_stream {
-	struct wlpavuo_audio_client_stream *streamdata;
+struct pipewire_sink_node {
+	struct pipewire_global *device;
+	struct wlpavuo_audio_sink *sinkdata;
+};
+
+struct pipewire_stream_node {
 	struct pipewire_global *client;
+	struct wlpavuo_audio_client_stream *stream;
 };
 
 struct pipewire_state {
@@ -62,18 +68,17 @@ static struct pipewire_global* find_pw_global(uint32_t id) {
 
 static void node_event_info(void *data, const struct pw_node_info *info) {
 	struct pipewire_global *global = data;
-	UNUSED(info);
 	if (global->type == PIPEWIRE_GLOBAL_TYPE_CLIENT_STREAM) {
 		// Stream name?
 		const char *streamname = spa_dict_lookup(info->props, "media.name");
 		if (streamname == NULL) {
 			return;
 		}
-		struct wlpavuo_audio_client_stream *streamdata = global->data;
-		if (streamdata->name) {
-			free(streamdata->name);
+		struct pipewire_stream_node *streamdata = global->data;
+		if (streamdata->stream->name != NULL) {
+			free(streamdata->stream->name);
 		}
-		streamdata->name = strdup(streamname);
+		streamdata->stream->name = strdup(streamname);
 	}
 	for (uint32_t i = 0; i < info->n_params;i++) {
 		if (info->params[i].id == SPA_PARAM_Props) {
@@ -108,25 +113,16 @@ static void node_event_param(void *data, int seq, uint32_t id, uint32_t index, u
 				break;
 		}
 	}
-	// All of this doesn't work for sinks like this? Hmm...
 	struct pipewire_global *glob = data;
 	// Convert to PA volume, maybe I should just yoink the function and do it directly here
 	unsigned long pavol = pa_sw_volume_from_linear(vol[0]);
 	if (glob->type == PIPEWIRE_GLOBAL_TYPE_CLIENT_STREAM) {
-		struct wlpavuo_audio_client_stream *streamdata = glob->data;
-		streamdata->volume = pavol;
+		struct pipewire_stream_node *streamdata = glob->data;
+		streamdata->stream->volume = pavol;
 		if (mute) {
-			streamdata->flags = WLPAVUO_AUDIO_MUTED;
+			streamdata->stream->flags = WLPAVUO_AUDIO_MUTED;
 		} else {
-			streamdata->flags = 0;
-		}
-	} else if (glob->type == PIPEWIRE_GLOBAL_TYPE_SINK) {
-		struct wlpavuo_audio_sink *sinkdata = glob->data;
-		sinkdata->volume = pavol;
-		if (mute) {
-			sinkdata->flags = WLPAVUO_AUDIO_MUTED;
-		} else {
-			sinkdata->flags = 0;
+			streamdata->stream->flags = 0;
 		}
 	}
 	fire_pipewire_callback();
@@ -138,19 +134,55 @@ struct pw_node_events node_events = {
 	node_event_param
 };
 
+static void device_event_info(void *data, const struct pw_device_info *info) {
+	struct pipewire_global *global = data;
+	for (uint32_t i = 0; i < info->n_params;i++) {
+		if (info->params[i].id == SPA_PARAM_Route) {
+			// why does this not do anything?!
+			pw_device_enum_params((struct pw_device*)global->proxy,0,i,0,0,NULL);
+			pw_device_subscribe_params((struct pw_device*)global->proxy,&i,1);
+			return;
+		}
+	}
+}
+
+static void device_event_param(void *data, int seq, uint32_t id, uint32_t index, uint32_t next,
+		const struct spa_pod *param) {
+		UNUSED(seq);
+	puts("Why am I not getting called?");
+	UNUSED(id);
+	UNUSED(index);
+	UNUSED(next);
+	UNUSED(data);
+	UNUSED(param);
+}
+
+struct pw_device_events device_events = {
+	PW_VERSION_DEVICE_EVENTS,
+	device_event_info,
+	device_event_param
+};
+
 static void add_pw_sink(uint32_t id, const struct spa_dict *props, struct pw_node *node) {
 	struct pipewire_global *newglob = calloc(1,sizeof(struct pipewire_global));
 	newglob->id = id;
 	newglob->type = PIPEWIRE_GLOBAL_TYPE_SINK;
 	newglob->proxy = (struct pw_proxy*)node;
 	pw_node_add_listener(node,&newglob->hook,&node_events,newglob);
-	// In the future this will def be pipewire_global_sink or something..
+	struct pipewire_sink_node *sinknode = calloc(1,sizeof(struct pipewire_sink_node));
 	struct wlpavuo_audio_sink *sinkdata = calloc(1,sizeof(struct wlpavuo_audio_sink));
-	newglob->data = sinkdata;
+	newglob->data = sinknode;
+	sinknode->sinkdata = sinkdata;
 	const char *name = spa_dict_lookup(props, "node.description");
 	sinkdata->name = name ? strdup(name) : "<no name>";
 	sinkdata->flags = 0;
 	sinkdata->volume = 50000;
+	// Find the device if we can!
+	const char *deviceid = spa_dict_lookup(props, "device.id");
+	if (deviceid) {
+		uint32_t id = strtoul(deviceid,NULL,10);
+		sinknode->device = find_pw_global(id);
+	}
 	wl_list_insert(&pw_state.globals, &newglob->link);
 	wl_list_insert(&pw_state.sinks, &sinkdata->link);
 }
@@ -169,6 +201,9 @@ static void add_pw_client_stream(uint32_t id, const struct spa_dict *props, stru
 		glob = find_pw_global(clientid);
 	}
 	struct wlpavuo_audio_client_stream *streamdata = calloc(1,sizeof(struct wlpavuo_audio_client_stream));
+	struct pipewire_stream_node *streamnode = calloc(1,sizeof(struct pipewire_stream_node));
+	streamnode->client = glob;
+	streamnode->stream = streamdata;
 	streamdata->name = NULL;
 	streamdata->volume = 50000;
 	if (glob) {
@@ -176,7 +211,7 @@ static void add_pw_client_stream(uint32_t id, const struct spa_dict *props, stru
 		clientdata->streams_count++;
 		wl_list_insert(&clientdata->streams, &streamdata->link);
 	}
-	newglob->data = streamdata;
+	newglob->data = streamnode;
 	streamdata->data = newglob;
 	wl_list_insert(&pw_state.globals, &newglob->link);
 }
@@ -195,6 +230,16 @@ static void add_pw_client(uint32_t id, const struct spa_dict *props, struct pw_c
 	wl_list_insert(&pw_state.clients, &clientdata->link);
 }
 
+static void add_pw_device(uint32_t id, const struct spa_dict *props, struct pw_device *device) {
+	UNUSED(props);
+	struct pipewire_global *newglob = calloc(1,sizeof(struct pipewire_global));
+	newglob->proxy = (struct pw_proxy*)device;
+	pw_device_add_listener(device,&newglob->hook,&device_events,newglob);
+	newglob->id = id;
+	newglob->type = PIPEWIRE_GLOBAL_TYPE_DEVICE;
+	wl_list_insert(&pw_state.globals, &newglob->link);
+}
+
 static void reg_event_global(void *data, uint32_t id, uint32_t permissions,
 		const char *type, uint32_t version, const struct spa_dict *props) {
 	UNUSED(data);
@@ -207,21 +252,26 @@ static void reg_event_global(void *data, uint32_t id, uint32_t permissions,
 		const char *class = spa_dict_lookup(props, "media.class");
 		if (class != NULL) {
 			if (strcmp(class,"Audio/Sink") == 0) {
-				struct pw_node *node =  pw_registry_bind(pw_state.registry,id,type,version,0);
+				struct pw_node *node = pw_registry_bind(pw_state.registry,id,type,version,0);
 				add_pw_sink(id,props,node);
 				fire_pipewire_callback();
 				return;
 			}
-			else if (strcmp(class,"Stream/Output/Audio") == 0) {
-				struct pw_node *node =  pw_registry_bind(pw_state.registry,id,type,version,0);
+			if (strcmp(class,"Stream/Output/Audio") == 0) {
+				struct pw_node *node = pw_registry_bind(pw_state.registry,id,type,version,0);
 				add_pw_client_stream(id,props,node);
 				fire_pipewire_callback();
 				return;
 			}
 		}
 	} else if (strcmp(type,PW_TYPE_INTERFACE_Client) == 0) {
-		struct pw_client *client =  pw_registry_bind(pw_state.registry,id,type,version,0);
+		struct pw_client *client = pw_registry_bind(pw_state.registry,id,type,version,0);
 		add_pw_client(id,props,client);
+		fire_pipewire_callback();
+		return;
+	} else if (strcmp(type,PW_TYPE_INTERFACE_Device) == 0) {
+		struct pw_device *device = pw_registry_bind(pw_state.registry,id,type,version,0);
+		add_pw_device(id,props,device);
 		fire_pipewire_callback();
 		return;
 	}
@@ -231,17 +281,26 @@ static void destroy_global(struct pipewire_global *global) {
 	wl_list_remove(&global->link);
 	pw_proxy_destroy(global->proxy);
 	switch(global->type) {
+		case PIPEWIRE_GLOBAL_TYPE_DEVICE:
+			break;
 		case PIPEWIRE_GLOBAL_TYPE_SINK: {
-			struct wlpavuo_audio_sink *sink = global->data;
-			wl_list_remove(&sink->link);
-			free(sink->name);
+			struct pipewire_sink_node *sink = global->data;
+			wl_list_remove(&sink->sinkdata->link);
+			free(sink->sinkdata->name);
+			free(sink->sinkdata);
 			free(sink);
 			break;
 		}
 		case PIPEWIRE_GLOBAL_TYPE_CLIENT_STREAM: {
-			struct wlpavuo_audio_client_stream *stream = global->data;
-			wl_list_remove(&stream->link);
-			free(stream->name);
+			struct pipewire_stream_node *stream = global->data;
+			wl_list_remove(&stream->stream->link);
+			struct pipewire_global *client = stream->client;
+			if (client != NULL) {
+				struct wlpavuo_audio_client *c = client->data;
+				c->streams_count--;
+			}
+			free(stream->stream->name);
+			free(stream->stream);
 			free(stream);
 			break;
 		}
