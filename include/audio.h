@@ -37,6 +37,7 @@ struct wlpavuo_audio_sink {
 	char *name;
 	unsigned long volume;
 	uint8_t channels;
+	void *data;
 };
 
 typedef void (*wlpavuo_audio_update_cb_t)(void *data);

@@ -31,6 +31,12 @@ struct pipewire_global {
 struct pipewire_sink_node {
 	struct pipewire_global *device;
 	struct wlpavuo_audio_sink *sinkdata;
+
+	// route stuff, maybe shouldn't be here
+	uint32_t r_index;
+	uint32_t r_device;
+	int r_direction;
+	char *r_name;
 };
 
 struct pipewire_stream_node {
@@ -146,30 +152,56 @@ static void device_event_param(void *data, int seq, uint32_t id, uint32_t index,
 	UNUSED(index);
 	UNUSED(next);
 	bool mute;
+	const char *name;
+	uint32_t direction;
+	int pod_index;
+	int device_id;
 	float vol[SPA_AUDIO_MAX_CHANNELS];
 	struct spa_pod_prop *prop;
 	struct spa_pod_object *obj = (struct spa_pod_object *) param;
 	SPA_POD_OBJECT_FOREACH(obj, prop) {
-		if (prop->key == SPA_PARAM_ROUTE_props) {
-			struct spa_pod_prop *rprop;
-			struct spa_pod_object *objp = (struct spa_pod_object*)&prop->value;
-			// This sure doesn't feel like it's gonna cease to function soon
-			SPA_POD_OBJECT_FOREACH(objp,rprop) {
-				switch (rprop->key) {
-					case SPA_PROP_mute:
-						spa_pod_get_bool(&rprop->value, &mute);
-					break;
-					case SPA_PROP_channelVolumes:
-						spa_pod_copy_array(&rprop->value, SPA_TYPE_Float, &vol, SPA_AUDIO_MAX_CHANNELS);
+		switch (prop->key) {
+			case SPA_PARAM_ROUTE_props: {
+				struct spa_pod_prop *rprop;
+				struct spa_pod_object *objp = (struct spa_pod_object*)&prop->value;
+				// This sure doesn't feel like it's gonna cease to function soon
+				SPA_POD_OBJECT_FOREACH(objp,rprop) {
+					switch (rprop->key) {
+						case SPA_PROP_mute:
+							spa_pod_get_bool(&rprop->value, &mute);
 						break;
+						case SPA_PROP_channelVolumes:
+							spa_pod_copy_array(&rprop->value, SPA_TYPE_Float, &vol, SPA_AUDIO_MAX_CHANNELS);
+							break;
+					}
 				}
 			}
+			case SPA_PARAM_ROUTE_index:
+				spa_pod_get_int(&prop->value,&pod_index);
+				break;
+			case SPA_PARAM_ROUTE_device:
+				spa_pod_get_int(&prop->value,&device_id);
+				break;
+			case SPA_PARAM_ROUTE_direction:
+				spa_pod_get_id(&prop->value,&direction);
+				break;
+			case SPA_PARAM_ROUTE_name:
+				spa_pod_get_string(&prop->value, &name);
+				break;
 		}
 	}
 	struct pipewire_global *glob = data;
 	if (glob->data) {
 		struct pipewire_global *sink = glob->data;
 		struct pipewire_sink_node *sinknode = sink->data;
+		sinknode->r_device = device_id;
+		sinknode->r_index = pod_index;
+		sinknode->r_direction = direction;
+		// uh oh, malloc action
+		if (sinknode->r_name != NULL) {
+			free(sinknode->r_name);
+		}
+		sinknode->r_name = strdup(name);
 		unsigned long pavol = pa_sw_volume_from_linear(vol[0]);
 		sinknode->sinkdata->volume = pavol;
 		if (mute) {
@@ -209,6 +241,7 @@ static void add_pw_sink(uint32_t id, const struct spa_dict *props, struct pw_nod
 		sinknode->device = find_pw_global(id);
 		// hack, fix this later!
 		sinknode->device->data = newglob;
+		sinkdata->data = sinknode;
 	}
 	wl_list_insert(&pw_state.globals, &newglob->link);
 	wl_list_insert(&pw_state.sinks, &sinkdata->link);
@@ -314,6 +347,9 @@ static void destroy_global(struct pipewire_global *global) {
 			struct pipewire_sink_node *sink = global->data;
 			wl_list_remove(&sink->sinkdata->link);
 			free(sink->sinkdata->name);
+			if (sink->r_name != NULL) {
+				free(sink->r_name);
+			}
 			free(sink->sinkdata);
 			free(sink);
 			break;
@@ -463,15 +499,62 @@ static void pipewire_set_stream_mute(struct wlpavuo_audio_client_stream *stream,
 }
 
 static void pipewire_set_sink_volume(struct wlpavuo_audio_sink *sink, uint32_t vol) {
-	UNUSED(sink);
-	UNUSED(vol);
-	UNIMPLEMENTED();
+	struct pipewire_sink_node *snode = sink->data;
+	char buf[1024];
+	float pwvols[SPA_AUDIO_MAX_CHANNELS];
+	pwvols[0] = pa_sw_volume_to_linear(vol);
+	for (unsigned int i = 1; i < SPA_AUDIO_MAX_CHANNELS;i++) {
+		pwvols[i] = pwvols[0];
+	}
+	struct spa_pod_builder b = { 0 };
+	b.data = buf;
+	b.size = sizeof(buf);
+	struct spa_pod_frame f;
+	struct spa_pod_frame fin;
+	// Seems like unlike with streams, this needs the full params...
+	// ... why?
+	spa_pod_builder_push_object(&b, &f, SPA_TYPE_OBJECT_ParamRoute, SPA_PARAM_Route);
+	spa_pod_builder_prop(&b,SPA_PARAM_ROUTE_index,0);
+	spa_pod_builder_int(&b, snode->r_index);
+	spa_pod_builder_prop(&b,SPA_PARAM_ROUTE_device,0);
+	spa_pod_builder_int(&b, snode->r_device);
+	spa_pod_builder_prop(&b,SPA_PARAM_ROUTE_direction,0);
+	spa_pod_builder_id(&b, snode->r_direction);
+	spa_pod_builder_prop(&b,SPA_PARAM_ROUTE_name,0);
+	spa_pod_builder_string(&b, snode->r_name);
+	spa_pod_builder_prop(&b, SPA_PARAM_ROUTE_props,0);
+	spa_pod_builder_push_object(&b, &fin, SPA_TYPE_OBJECT_Props, SPA_PARAM_ROUTE_props);
+	spa_pod_builder_prop(&b,SPA_PROP_channelVolumes,0);
+	spa_pod_builder_array(&b,sizeof(float),SPA_TYPE_Float,SPA_AUDIO_MAX_CHANNELS,pwvols);
+	struct spa_pod *param = spa_pod_builder_pop(&b, &fin);
+	param = spa_pod_builder_pop(&b, &f);
+	pw_device_set_param((struct pw_device*)snode->device->proxy,SPA_PARAM_Route,0,param);
 }
 
 static void pipewire_set_sink_mute(struct wlpavuo_audio_sink *sink, char mute) {
-	UNUSED(sink);
-	UNUSED(mute);
-	UNIMPLEMENTED();
+	struct pipewire_sink_node *snode = sink->data;
+	char buf[1024];
+	struct spa_pod_builder b = { 0 };
+	b.data = buf;
+	b.size = sizeof(buf);
+	struct spa_pod_frame f;
+	struct spa_pod_frame fin;
+	spa_pod_builder_push_object(&b, &f, SPA_TYPE_OBJECT_ParamRoute, SPA_PARAM_Route);
+	spa_pod_builder_prop(&b,SPA_PARAM_ROUTE_index,0);
+	spa_pod_builder_int(&b, snode->r_index);
+	spa_pod_builder_prop(&b,SPA_PARAM_ROUTE_device,0);
+	spa_pod_builder_int(&b, snode->r_device);
+	spa_pod_builder_prop(&b,SPA_PARAM_ROUTE_direction,0);
+	spa_pod_builder_id(&b, snode->r_direction);
+	spa_pod_builder_prop(&b,SPA_PARAM_ROUTE_name,0);
+	spa_pod_builder_string(&b, snode->r_name);
+	spa_pod_builder_prop(&b, SPA_PARAM_ROUTE_props,0);
+	spa_pod_builder_push_object(&b, &fin, SPA_TYPE_OBJECT_Props, SPA_PARAM_ROUTE_props);
+	spa_pod_builder_prop(&b,SPA_PROP_mute,0);
+	spa_pod_builder_bool(&b, mute == 1);
+	struct spa_pod *param = spa_pod_builder_pop(&b, &fin);
+	param = spa_pod_builder_pop(&b, &f);
+	pw_device_set_param((struct pw_device*)snode->device->proxy,SPA_PARAM_Route,0,param);
 }
 
 static struct wl_list* pipewire_get_clients() {
