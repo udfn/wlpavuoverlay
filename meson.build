@@ -3,8 +3,10 @@ project('wlpavuoverlay', 'c',
 		'c_std=c11'
 	])
 # shouldn't these warnings be suppressed by setting the c_std to gnu?
-add_global_arguments(['-Wno-gnu-statement-expression','-Wno-gnu-zero-variadic-macro-arguments'], language:'c')
 cc = meson.get_compiler('c')
+if cc.has_argument('-Wno-gnu-statement-expression')
+	add_global_arguments(['-Wno-gnu-statement-expression','-Wno-gnu-zero-variadic-macro-arguments'], language:'c')
+endif
 wayland_client = dependency('wayland-client')
 wayland_cursor = dependency('wayland-cursor')
 cairo = dependency('cairo')

@@ -5,6 +5,7 @@
 #include <spa/pod/parser.h>
 #include <spa/pod/builder.h>
 #include <spa/param/props.h>
+#include <spa/param/param.h>
 #include <spa/param/audio/raw.h>
 #include "audio.h"
 // TODO!
@@ -80,13 +81,9 @@ static void node_event_info(void *data, const struct pw_node_info *info) {
 		}
 		streamdata->stream->name = strdup(streamname);
 	}
-	for (uint32_t i = 0; i < info->n_params;i++) {
-		if (info->params[i].id == SPA_PARAM_Props) {
-			pw_node_enum_params((struct pw_node*)global->proxy,0,i,0,0,NULL);
-			pw_node_subscribe_params((struct pw_node*)global->proxy,&i,1);
-			return;
-		}
-	}
+	uint32_t id = SPA_PARAM_Props;
+	pw_node_enum_params((struct pw_node*)global->proxy,0,id,0,0,NULL);
+	pw_node_subscribe_params((struct pw_node*)global->proxy,&id,1);
 }
 
 static void fire_pipewire_callback() {
@@ -135,26 +132,54 @@ struct pw_node_events node_events = {
 };
 
 static void device_event_info(void *data, const struct pw_device_info *info) {
+	UNUSED(info);
 	struct pipewire_global *global = data;
-	for (uint32_t i = 0; i < info->n_params;i++) {
-		if (info->params[i].id == SPA_PARAM_Route) {
-			// why does this not do anything?!
-			pw_device_enum_params((struct pw_device*)global->proxy,0,i,0,0,NULL);
-			pw_device_subscribe_params((struct pw_device*)global->proxy,&i,1);
-			return;
-		}
-	}
+	uint32_t id = SPA_PARAM_Route;
+	pw_device_enum_params((struct pw_device*)global->proxy,0,id,0,0,NULL);
+	pw_device_subscribe_params((struct pw_device*)global->proxy,&id,1);
 }
 
 static void device_event_param(void *data, int seq, uint32_t id, uint32_t index, uint32_t next,
 		const struct spa_pod *param) {
-		UNUSED(seq);
-	puts("Why am I not getting called?");
+	UNUSED(seq);
 	UNUSED(id);
 	UNUSED(index);
 	UNUSED(next);
-	UNUSED(data);
-	UNUSED(param);
+	bool mute;
+	float vol[SPA_AUDIO_MAX_CHANNELS];
+	struct spa_pod_prop *prop;
+	struct spa_pod_object *obj = (struct spa_pod_object *) param;
+	SPA_POD_OBJECT_FOREACH(obj, prop) {
+		if (prop->key == SPA_PARAM_ROUTE_props) {
+			struct spa_pod_prop *rprop;
+			struct spa_pod_object *objp = (struct spa_pod_object*)&prop->value;
+			// This sure doesn't feel like it's gonna cease to function soon
+			SPA_POD_OBJECT_FOREACH(objp,rprop) {
+				switch (rprop->key) {
+					case SPA_PROP_mute:
+						spa_pod_get_bool(&rprop->value, &mute);
+					break;
+					case SPA_PROP_channelVolumes:
+						spa_pod_copy_array(&rprop->value, SPA_TYPE_Float, &vol, SPA_AUDIO_MAX_CHANNELS);
+						break;
+				}
+			}
+		}
+	}
+	struct pipewire_global *glob = data;
+	if (glob->data) {
+		struct pipewire_global *sink = glob->data;
+		struct pipewire_sink_node *sinknode = sink->data;
+		unsigned long pavol = pa_sw_volume_from_linear(vol[0]);
+		sinknode->sinkdata->volume = pavol;
+		if (mute) {
+			sinknode->sinkdata->flags = WLPAVUO_AUDIO_MUTED;
+		} else {
+			sinknode->sinkdata->flags = 0;
+		}
+		fire_pipewire_callback();
+	}
+
 }
 
 struct pw_device_events device_events = {
@@ -182,6 +207,8 @@ static void add_pw_sink(uint32_t id, const struct spa_dict *props, struct pw_nod
 	if (deviceid) {
 		uint32_t id = strtoul(deviceid,NULL,10);
 		sinknode->device = find_pw_global(id);
+		// hack, fix this later!
+		sinknode->device->data = newglob;
 	}
 	wl_list_insert(&pw_state.globals, &newglob->link);
 	wl_list_insert(&pw_state.sinks, &sinkdata->link);
