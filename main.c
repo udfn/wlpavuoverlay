@@ -13,7 +13,6 @@
 #include "wlpavuoverlay.h"
 #include "ui.h"
 #include "surface.h"
-#include "pulse.h"
 #include "wlr-layer-shell-unstable-v1.h"
 #include "xdg-shell.h"
 #include "xdg-decoration-unstable-v1.h"
@@ -99,14 +98,6 @@ static void background_surface_destroy(struct wlpavuo_surface *surf) {
 	free(surf->userdata);
 }
 
-static void handle_pulse_update(void *data) {
-	struct wlpavuo_surface *surf = data;
-	// Shouldn't render on the pulse thread!
-	wlpavuo_surface_set_need_draw(surf,false);
-	// Is this safe? Probably not!
-	wl_display_flush(surf->state->display);
-}
-
 static void set_surface_role(struct wlpavuo_surface *surface, char layer) {
 	if (!layer || wlpavuo_surface_role_layershell(surface, NULL, ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY)) {
 		if (wlpavuo_surface_role_toplevel(surface)) {
@@ -171,7 +162,6 @@ static void create_surface(struct wlpavuo_state *state, enum wlpavuo_surface_lay
 		setup_wlpavuo_ui_surface(surf);
 		wlpavuo_surface_set_size(surf, 520, 540);
 	}
-	wlpavuo_pulse_set_update_callback(handle_pulse_update, surf);
 	wl_surface_commit(surf->wl.surface);
 }
 
@@ -194,6 +184,5 @@ int main (int argc, char *argv[]) {
 	}
 	wlpavuo_wayland_run(&state);
 	wlpavuo_wayland_uninit(&state);
-	wlpavuo_pulse_uninit();
 	return 0;
 }

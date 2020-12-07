@@ -12,7 +12,7 @@
 #include "ui.h"
 #include "nuklear.h"
 #include "xdg-shell.h"
-#include "pulse.h"
+#include "audio.h"
 
 struct wlpavuo_ui {
 	struct nk_context *context;
@@ -388,8 +388,17 @@ void wlpavuo_ui_input_pointer(struct wlpavuo_surface *surface, struct wlpavuo_po
 	wlpavuo_surface_set_need_draw(surface,true);
 }
 
+static void handle_audio_update(void *data) {
+	struct wlpavuo_surface *surf = data;
+	// Shouldn't render on the audio thread!
+	wlpavuo_surface_set_need_draw(surf,false);
+	// Is this safe? Probably not!
+	wl_display_flush(surf->state->display);
+}
+
 char wlpavuo_ui_run(struct wlpavuo_surface *surface, cairo_t *cr) {
 	struct wlpavuo_ui *ui = surface->userdata;
+	const struct wlpavuo_audio_impl *aimpl = wlpavuo_audio_get_pa();
 	if(!ui) {
 		surface->userdata = calloc(1,sizeof(struct wlpavuo_ui));
 		ui = surface->userdata;
@@ -404,6 +413,7 @@ char wlpavuo_ui_run(struct wlpavuo_surface *surface, cairo_t *cr) {
 		memcpy(ui->color_table, nk_default_color_style, sizeof(nk_default_color_style));
 		set_nk_color(&ui->color_table[NK_COLOR_WINDOW], 8,8,8,231);
 		nk_style_from_table(ui->context, ui->color_table);
+		aimpl->set_update_callback(handle_audio_update,surface);
 	}
 	ui->font.userdata.ptr = cr;
 	ui->fontsmol.userdata.ptr = cr;
@@ -421,8 +431,8 @@ char wlpavuo_ui_run(struct wlpavuo_surface *surface, cairo_t *cr) {
 			ui->active = 0;
 		}
 	}
-	enum wlpavuo_pulse_status pulsestatus = wlpavuo_pulse_init();
-	wlpavuo_pulse_lock();
+	enum wlpavuo_audio_status status = aimpl->init();
+	aimpl->lock();
 	copy_wlpavuo_input_to_nk(ui, ctx);
 	int32_t scale = surface->scale;
 	nk_flags winflags = surface->flags & WLPAVUO_SURFACE_FLAG_CSD ? NK_WINDOW_TITLE|NK_WINDOW_BORDER|NK_WINDOW_CLOSABLE:
@@ -433,22 +443,22 @@ char wlpavuo_ui_run(struct wlpavuo_surface *surface, cairo_t *cr) {
 			surface->width-(inset*2),surface->height-(inset*2)),
 			winflags)) {
 		int scroll_to = -1;
-		if (pulsestatus == WLPAVUO_PULSE_STATUS_CONNECTING) {
+		if (status == WLPAVUO_AUDIO_STATUS_CONNECTING) {
 			nk_layout_row_dynamic(ctx, 22, 1);
 			nk_label(ctx,"Connecting to Pulseaudio...",NK_TEXT_ALIGN_CENTERED);
-		} else if (pulsestatus == WLPAVUO_PULSE_STATUS_FAILED) {
+		} else if (status == WLPAVUO_AUDIO_STATUS_FAILED) {
 			nk_layout_row_dynamic(ctx, 22, 1);
 			nk_label(ctx,"Failed connecting to Pulse :(", NK_TEXT_ALIGN_CENTERED);
 			if (nk_button_label(ctx, "Quit")) {
 				wlpavuo_surface_destroy_later(surface);
 			}
-		} else if (pulsestatus == WLPAVUO_PULSE_STATUS_READY) {
+		} else if (status == WLPAVUO_AUDIO_STATUS_READY) {
 			char buf[256];
-			struct wlpavuo_pulse_client *client;
-			struct wlpavuo_pulse_sink *sink;
+			struct wlpavuo_audio_client *client;
+			struct wlpavuo_audio_sink *sink;
 			int counter = 0;
-			wl_list_for_each(sink, wlpavuo_pulse_get_sinks(), link) {
-				int mutetmp = sink->flags & WLPAVUO_PULSE_MUTED;
+			wl_list_for_each(sink, aimpl->get_sinks(), link) {
+				int mutetmp = sink->flags & WLPAVUO_AUDIO_MUTED;
 				unsigned long voltmp = sink->volume;
 				if (counter == ui->input.selected) {
 					do_keyboard_input(ui, ctx, &voltmp, &mutetmp, &scroll_to);
@@ -459,11 +469,11 @@ char wlpavuo_ui_run(struct wlpavuo_surface *surface, cairo_t *cr) {
 				}
 				snprintf(buf,255,"%s", sink->name);
 				do_volume_control(surface, ctx, &ui->font, &ui->fontsmol, buf, &voltmp, &mutetmp);
-				if (mutetmp != (sink->flags & WLPAVUO_PULSE_MUTED)) {
-					wlpavuo_pulse_set_sink_mute(sink, mutetmp ? 1 : 0);
+				if (mutetmp != (sink->flags & WLPAVUO_AUDIO_MUTED)) {
+					aimpl->set_sink_mute(sink, mutetmp ? 1 : 0);
 				}
 				if (voltmp != sink->volume) {
-					wlpavuo_pulse_set_sink_volume(sink, voltmp);
+					aimpl->set_sink_volume(sink, voltmp);
 				}
 				counter++;
 			}
@@ -471,7 +481,7 @@ char wlpavuo_ui_run(struct wlpavuo_surface *surface, cairo_t *cr) {
 			nk_label(ctx,"-----",NK_TEXT_ALIGN_CENTERED);
 			uint32_t count = 0;
 			// Go through the list in reverse, to make new clients not push everything down
-			wl_list_for_each_reverse(client, wlpavuo_pulse_get_clients(), link) {
+			wl_list_for_each_reverse(client, aimpl->get_clients(), link) {
 				nk_style_set_font(ctx, &ui->font);
 				if (client->streams_count == 0) {
 					continue;
@@ -480,9 +490,9 @@ char wlpavuo_ui_run(struct wlpavuo_surface *surface, cairo_t *cr) {
 				nk_layout_row_dynamic(ctx, 20, 1);
 				snprintf(buf, 255, "%s",client->name);
 				nk_label(ctx, buf, NK_TEXT_ALIGN_LEFT);
-				struct wlpavuo_pulse_client_stream *stream;
+				struct wlpavuo_audio_client_stream *stream;
 				wl_list_for_each(stream,&client->streams,link) {
-					int mutetmp = stream->flags & WLPAVUO_PULSE_MUTED;
+					int mutetmp = stream->flags & WLPAVUO_AUDIO_MUTED;
 					unsigned long voltmp = stream->volume;
 					if (counter == ui->input.selected) {
 						do_keyboard_input(ui, ctx, &voltmp, &mutetmp, &scroll_to);
@@ -493,11 +503,11 @@ char wlpavuo_ui_run(struct wlpavuo_surface *surface, cairo_t *cr) {
 					}
 					snprintf(buf,255,"%s", stream->name);
 					do_volume_control(surface, ctx, &ui->fontsmol, &ui->fontsmol, buf, &voltmp, &mutetmp);
-					if (mutetmp != (stream->flags & WLPAVUO_PULSE_MUTED)) {
-						wlpavuo_pulse_set_stream_mute(stream, mutetmp ? 1 : 0);
+					if (mutetmp != (stream->flags & WLPAVUO_AUDIO_MUTED)) {
+						aimpl->set_stream_mute(stream, mutetmp ? 1 : 0);
 					}
 					if (voltmp != stream->volume) {
-						wlpavuo_pulse_set_stream_volume(stream, voltmp);
+						aimpl->set_stream_volume(stream, voltmp);
 					}
 					counter++;
 				}
@@ -516,7 +526,7 @@ char wlpavuo_ui_run(struct wlpavuo_surface *surface, cairo_t *cr) {
 			nk_window_set_scroll(ctx, 0, scroll_to);
 		}
 	}
-	wlpavuo_pulse_unlock();
+	aimpl->unlock();
 	nk_end(ctx);
 	check_window_move(surface,ctx);
 	void *cmds = nk_buffer_memory(&ctx->memory);

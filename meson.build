@@ -13,7 +13,8 @@ paper = cc.find_library('libm')
 wlegl = dependency('wayland-egl')
 epoxy = dependency('epoxy')
 xkbc = dependency('xkbcommon')
-pulseaudio = dependency('libpulse')
+pulseaudio = dependency('libpulse', required:false)
+pipewire = dependency('libpipewire-0.3',required:false)
 includes = include_directories(['include'])
 subdir('protocol')
 srcfiles = [
@@ -23,7 +24,6 @@ srcfiles = [
 	'ui.c',
 	'seat.c',
 	'shell.c',
-	'pulse.c',
 	'wayland.c'
 ]
 deps = [
@@ -37,7 +37,15 @@ deps = [
 	paper,
 	epoxy,
 	xkbc,
-	pulseaudio,
 ]
-
+if pipewire.found()
+	srcfiles += 'pipewire.c'
+	deps += pipewire
+	add_project_arguments('-DHAVE_PIPEWIRE=1',language:'c')
+endif
+if pulseaudio.found()
+	srcfiles += 'pulse.c'
+	deps += pulseaudio
+	add_project_arguments('-DHAVE_PULSEAUDIO=1',language:'c')
+endif
 executable('wlpavuoverlay',srcfiles,[proto_c,proto_h],dependencies: deps, include_directories:includes,install:true)
