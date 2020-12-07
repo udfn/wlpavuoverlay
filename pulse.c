@@ -317,7 +317,12 @@ void wlpavuo_pulse_unlock() {
 	pa_threaded_mainloop_unlock(pulse_state.mainloop);
 }
 
-static const struct wlpavuo_audio_impl pulse_impl =  {
+static const char* pulse_get_name() {
+	return "PulseAudio";
+}
+
+static const struct wlpavuo_audio_impl pulse_impl = {
+	pulse_get_name,
 	wlpavuo_pulse_init,
 	wlpavuo_pulse_uninit,
 	wlpavuo_pulse_set_update_callback,

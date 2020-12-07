@@ -41,6 +41,7 @@ struct wlpavuo_ui {
 		char mute_selected;
 		char scroll_to_selected;
 	} input;
+	const struct wlpavuo_audio_impl *backend;
 	int num_items;
 };
 
@@ -257,6 +258,7 @@ static void check_window_move(struct wlpavuo_surface *surface, struct nk_context
 
 void wlpavuo_ui_destroy(struct wlpavuo_surface *surface) {
 	struct wlpavuo_ui *ui = surface->userdata;
+	ui->backend->uninit();
 	free(ui->context);
 	free(ui->draw_last);
 	free(ui->draw_buf);
@@ -398,7 +400,6 @@ static void handle_audio_update(void *data) {
 
 char wlpavuo_ui_run(struct wlpavuo_surface *surface, cairo_t *cr) {
 	struct wlpavuo_ui *ui = surface->userdata;
-	const struct wlpavuo_audio_impl *aimpl = wlpavuo_audio_get_pa();
 	if(!ui) {
 		surface->userdata = calloc(1,sizeof(struct wlpavuo_ui));
 		ui = surface->userdata;
@@ -413,8 +414,10 @@ char wlpavuo_ui_run(struct wlpavuo_surface *surface, cairo_t *cr) {
 		memcpy(ui->color_table, nk_default_color_style, sizeof(nk_default_color_style));
 		set_nk_color(&ui->color_table[NK_COLOR_WINDOW], 8,8,8,231);
 		nk_style_from_table(ui->context, ui->color_table);
-		aimpl->set_update_callback(handle_audio_update,surface);
+		ui->backend = wlpavuo_audio_get_pw();
+		ui->backend->set_update_callback(handle_audio_update,surface);
 	}
+	const struct wlpavuo_audio_impl *aimpl = ui->backend;
 	ui->font.userdata.ptr = cr;
 	ui->fontsmol.userdata.ptr = cr;
 	struct nk_context *ctx = ui->context;
@@ -443,17 +446,19 @@ char wlpavuo_ui_run(struct wlpavuo_surface *surface, cairo_t *cr) {
 			surface->width-(inset*2),surface->height-(inset*2)),
 			winflags)) {
 		int scroll_to = -1;
+		char buf[256];
 		if (status == WLPAVUO_AUDIO_STATUS_CONNECTING) {
 			nk_layout_row_dynamic(ctx, 22, 1);
-			nk_label(ctx,"Connecting to Pulseaudio...",NK_TEXT_ALIGN_CENTERED);
+			snprintf(buf,255, "Connecting to %s...", aimpl->get_name());
+			nk_label(ctx,buf,NK_TEXT_ALIGN_CENTERED);
 		} else if (status == WLPAVUO_AUDIO_STATUS_FAILED) {
 			nk_layout_row_dynamic(ctx, 22, 1);
-			nk_label(ctx,"Failed connecting to Pulse :(", NK_TEXT_ALIGN_CENTERED);
+			snprintf(buf,255,"Failed connecting to %s :(", aimpl->get_name());
+			nk_label(ctx,buf, NK_TEXT_ALIGN_CENTERED);
 			if (nk_button_label(ctx, "Quit")) {
 				wlpavuo_surface_destroy_later(surface);
 			}
 		} else if (status == WLPAVUO_AUDIO_STATUS_READY) {
-			char buf[256];
 			struct wlpavuo_audio_client *client;
 			struct wlpavuo_audio_sink *sink;
 			int counter = 0;

@@ -41,6 +41,7 @@ struct wlpavuo_audio_sink {
 typedef void (*wlpavuo_audio_update_cb_t)(void *data);
 
 struct wlpavuo_audio_impl {
+	const char* (*get_name)();
 	enum wlpavuo_audio_status (*init)();
 	void (*uninit)();
 	void (*set_update_callback)(wlpavuo_audio_update_cb_t cb, void *data);
