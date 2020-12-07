@@ -3,6 +3,7 @@
 // Pulse is only included here for volume conversion purposes
 #include <pulse/pulseaudio.h>
 #include <spa/pod/parser.h>
+#include <spa/pod/builder.h>
 #include <spa/param/props.h>
 #include <spa/param/audio/raw.h>
 #include "audio.h"
@@ -176,6 +177,7 @@ static void add_pw_client_stream(uint32_t id, const struct spa_dict *props, stru
 		wl_list_insert(&clientdata->streams, &streamdata->link);
 	}
 	newglob->data = streamdata;
+	streamdata->data = newglob;
 	wl_list_insert(&pw_state.globals, &newglob->link);
 }
 
@@ -340,15 +342,38 @@ static void pipewire_unlock() {
 }
 
 static void pipewire_set_stream_volume(struct wlpavuo_audio_client_stream *stream, uint32_t vol) {
-	UNUSED(stream);
-	UNUSED(vol);
-	UNIMPLEMENTED();
+	char buf[1024];
+	float pwvols[SPA_AUDIO_MAX_CHANNELS];
+	// This is stupid why do I do this like this
+	pwvols[0] = pa_sw_volume_to_linear(vol);
+	for (unsigned int i = 1; i < SPA_AUDIO_MAX_CHANNELS;i++) {
+		pwvols[i] = pwvols[0];
+	}
+	// I do this like this because clang bitches about not initializing _padding if I use SPA_POD_BUILDER_INIT
+	struct spa_pod_builder b = { 0 };
+	b.data = buf;
+	b.size = sizeof(buf);
+	struct spa_pod_frame f;
+	spa_pod_builder_push_object(&b, &f, SPA_TYPE_OBJECT_Props, SPA_PARAM_Props);
+	spa_pod_builder_prop(&b,SPA_PROP_channelVolumes,0);
+	spa_pod_builder_array(&b,sizeof(float),SPA_TYPE_Float,SPA_AUDIO_MAX_CHANNELS,pwvols);
+	struct spa_pod *param = spa_pod_builder_pop(&b, &f);
+	struct pipewire_global *global = stream->data;
+	pw_node_set_param((struct pw_node*)global->proxy,SPA_PARAM_Props,0,param);
 }
 
 static void pipewire_set_stream_mute(struct wlpavuo_audio_client_stream *stream, char mute) {
-	UNUSED(stream);
-	UNUSED(mute);
-	UNIMPLEMENTED();
+	char buf[1024];
+	struct spa_pod_builder b = { 0 };
+	b.data = buf;
+	b.size = sizeof(buf);
+	struct spa_pod_frame f;
+	spa_pod_builder_push_object(&b, &f, SPA_TYPE_OBJECT_Props, SPA_PARAM_Props);
+	spa_pod_builder_prop(&b,SPA_PROP_mute,0);
+	spa_pod_builder_bool(&b, mute == 1);
+	struct spa_pod *param = spa_pod_builder_pop(&b, &f);
+	struct pipewire_global *global = stream->data;
+	pw_node_set_param((struct pw_node*)global->proxy,SPA_PARAM_Props,0,param);
 }
 
 static void pipewire_set_sink_volume(struct wlpavuo_audio_sink *sink, uint32_t vol) {

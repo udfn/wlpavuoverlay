@@ -19,6 +19,7 @@ struct wlpavuo_audio_client_stream {
 	char *name;
 	unsigned long volume;
 	uint8_t channels;
+	void *data;
 };
 
 struct wlpavuo_audio_client {
