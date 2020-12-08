@@ -30,18 +30,19 @@ struct pipewire_global {
 
 struct pipewire_sink_node {
 	struct pipewire_global *device;
-	struct wlpavuo_audio_sink *sinkdata;
+	struct wlpavuo_audio_sink sinkdata;
 
 	// route stuff, maybe shouldn't be here
 	uint32_t r_index;
 	uint32_t r_device;
+	uint32_t r_channels;
 	int r_direction;
 	char *r_name;
 };
 
 struct pipewire_stream_node {
 	struct pipewire_global *client;
-	struct wlpavuo_audio_client_stream *stream;
+	struct wlpavuo_audio_client_stream stream;
 };
 
 struct pipewire_state {
@@ -82,10 +83,10 @@ static void node_event_info(void *data, const struct pw_node_info *info) {
 			return;
 		}
 		struct pipewire_stream_node *streamdata = global->data;
-		if (streamdata->stream->name != NULL) {
-			free(streamdata->stream->name);
+		if (streamdata->stream.name != NULL) {
+			free(streamdata->stream.name);
 		}
-		streamdata->stream->name = strdup(streamname);
+		streamdata->stream.name = strdup(streamname);
 	}
 	uint32_t id = SPA_PARAM_Props;
 	pw_node_enum_params((struct pw_node*)global->proxy,0,id,0,0,NULL);
@@ -121,12 +122,8 @@ static void node_event_param(void *data, int seq, uint32_t id, uint32_t index, u
 	unsigned long pavol = pa_sw_volume_from_linear(vol[0]);
 	if (glob->type == PIPEWIRE_GLOBAL_TYPE_CLIENT_STREAM) {
 		struct pipewire_stream_node *streamdata = glob->data;
-		streamdata->stream->volume = pavol;
-		if (mute) {
-			streamdata->stream->flags = WLPAVUO_AUDIO_MUTED;
-		} else {
-			streamdata->stream->flags = 0;
-		}
+		streamdata->stream.volume = pavol;
+		streamdata->stream.flags = mute ? WLPAVUO_AUDIO_MUTED : 0;
 	}
 	fire_pipewire_callback();
 }
@@ -156,6 +153,7 @@ static void device_event_param(void *data, int seq, uint32_t id, uint32_t index,
 	uint32_t direction;
 	int pod_index;
 	int device_id;
+	uint32_t num_channels;
 	float vol[SPA_AUDIO_MAX_CHANNELS];
 	struct spa_pod_prop *prop;
 	struct spa_pod_object *obj = (struct spa_pod_object *) param;
@@ -171,7 +169,7 @@ static void device_event_param(void *data, int seq, uint32_t id, uint32_t index,
 							spa_pod_get_bool(&rprop->value, &mute);
 						break;
 						case SPA_PROP_channelVolumes:
-							spa_pod_copy_array(&rprop->value, SPA_TYPE_Float, &vol, SPA_AUDIO_MAX_CHANNELS);
+							num_channels = spa_pod_copy_array(&rprop->value, SPA_TYPE_Float, &vol, SPA_AUDIO_MAX_CHANNELS);
 							break;
 					}
 				}
@@ -197,18 +195,15 @@ static void device_event_param(void *data, int seq, uint32_t id, uint32_t index,
 		sinknode->r_device = device_id;
 		sinknode->r_index = pod_index;
 		sinknode->r_direction = direction;
+		sinknode->r_channels = num_channels;
 		// uh oh, malloc action
 		if (sinknode->r_name != NULL) {
 			free(sinknode->r_name);
 		}
 		sinknode->r_name = strdup(name);
 		unsigned long pavol = pa_sw_volume_from_linear(vol[0]);
-		sinknode->sinkdata->volume = pavol;
-		if (mute) {
-			sinknode->sinkdata->flags = WLPAVUO_AUDIO_MUTED;
-		} else {
-			sinknode->sinkdata->flags = 0;
-		}
+		sinknode->sinkdata.volume = pavol;
+		sinknode->sinkdata.flags = mute ? WLPAVUO_AUDIO_MUTED : 0;
 		fire_pipewire_callback();
 	}
 
@@ -227,13 +222,10 @@ static void add_pw_sink(uint32_t id, const struct spa_dict *props, struct pw_nod
 	newglob->proxy = (struct pw_proxy*)node;
 	pw_node_add_listener(node,&newglob->hook,&node_events,newglob);
 	struct pipewire_sink_node *sinknode = calloc(1,sizeof(struct pipewire_sink_node));
-	struct wlpavuo_audio_sink *sinkdata = calloc(1,sizeof(struct wlpavuo_audio_sink));
+	struct wlpavuo_audio_sink *sinkdata = &sinknode->sinkdata;
 	newglob->data = sinknode;
-	sinknode->sinkdata = sinkdata;
 	const char *name = spa_dict_lookup(props, "node.description");
 	sinkdata->name = name ? strdup(name) : "<no name>";
-	sinkdata->flags = 0;
-	sinkdata->volume = 50000;
 	// Find the device if we can!
 	const char *deviceid = spa_dict_lookup(props, "device.id");
 	if (deviceid) {
@@ -260,12 +252,9 @@ static void add_pw_client_stream(uint32_t id, const struct spa_dict *props, stru
 		clientid = strtoul(clientidstring,NULL,10);
 		glob = find_pw_global(clientid);
 	}
-	struct wlpavuo_audio_client_stream *streamdata = calloc(1,sizeof(struct wlpavuo_audio_client_stream));
 	struct pipewire_stream_node *streamnode = calloc(1,sizeof(struct pipewire_stream_node));
+	struct wlpavuo_audio_client_stream *streamdata = &streamnode->stream;
 	streamnode->client = glob;
-	streamnode->stream = streamdata;
-	streamdata->name = NULL;
-	streamdata->volume = 50000;
 	if (glob) {
 		struct wlpavuo_audio_client *clientdata = glob->data;
 		clientdata->streams_count++;
@@ -345,25 +334,23 @@ static void destroy_global(struct pipewire_global *global) {
 			break;
 		case PIPEWIRE_GLOBAL_TYPE_SINK: {
 			struct pipewire_sink_node *sink = global->data;
-			wl_list_remove(&sink->sinkdata->link);
-			free(sink->sinkdata->name);
+			wl_list_remove(&sink->sinkdata.link);
+			free(sink->sinkdata.name);
 			if (sink->r_name != NULL) {
 				free(sink->r_name);
 			}
-			free(sink->sinkdata);
 			free(sink);
 			break;
 		}
 		case PIPEWIRE_GLOBAL_TYPE_CLIENT_STREAM: {
 			struct pipewire_stream_node *stream = global->data;
-			wl_list_remove(&stream->stream->link);
+			wl_list_remove(&stream->stream.link);
 			struct pipewire_global *client = stream->client;
 			if (client != NULL) {
 				struct wlpavuo_audio_client *c = client->data;
 				c->streams_count--;
 			}
-			free(stream->stream->name);
-			free(stream->stream);
+			free(stream->stream.name);
 			free(stream);
 			break;
 		}
@@ -498,6 +485,17 @@ static void pipewire_set_stream_mute(struct wlpavuo_audio_client_stream *stream,
 	pw_node_set_param((struct pw_node*)global->proxy,SPA_PARAM_Props,0,param);
 }
 
+static void build_route_pod(struct spa_pod_builder *b, struct pipewire_sink_node *snode) {
+	spa_pod_builder_prop(b,SPA_PARAM_ROUTE_index,0);
+	spa_pod_builder_int(b, snode->r_index);
+	spa_pod_builder_prop(b,SPA_PARAM_ROUTE_device,0);
+	spa_pod_builder_int(b, snode->r_device);
+	spa_pod_builder_prop(b,SPA_PARAM_ROUTE_direction,0);
+	spa_pod_builder_id(b, snode->r_direction);
+	spa_pod_builder_prop(b,SPA_PARAM_ROUTE_name,0);
+	spa_pod_builder_string(b, snode->r_name);
+}
+
 static void pipewire_set_sink_volume(struct wlpavuo_audio_sink *sink, uint32_t vol) {
 	struct pipewire_sink_node *snode = sink->data;
 	char buf[1024];
@@ -514,18 +512,11 @@ static void pipewire_set_sink_volume(struct wlpavuo_audio_sink *sink, uint32_t v
 	// Seems like unlike with streams, this needs the full params...
 	// ... why?
 	spa_pod_builder_push_object(&b, &f, SPA_TYPE_OBJECT_ParamRoute, SPA_PARAM_Route);
-	spa_pod_builder_prop(&b,SPA_PARAM_ROUTE_index,0);
-	spa_pod_builder_int(&b, snode->r_index);
-	spa_pod_builder_prop(&b,SPA_PARAM_ROUTE_device,0);
-	spa_pod_builder_int(&b, snode->r_device);
-	spa_pod_builder_prop(&b,SPA_PARAM_ROUTE_direction,0);
-	spa_pod_builder_id(&b, snode->r_direction);
-	spa_pod_builder_prop(&b,SPA_PARAM_ROUTE_name,0);
-	spa_pod_builder_string(&b, snode->r_name);
+	build_route_pod(&b, snode);
 	spa_pod_builder_prop(&b, SPA_PARAM_ROUTE_props,0);
 	spa_pod_builder_push_object(&b, &fin, SPA_TYPE_OBJECT_Props, SPA_PARAM_ROUTE_props);
 	spa_pod_builder_prop(&b,SPA_PROP_channelVolumes,0);
-	spa_pod_builder_array(&b,sizeof(float),SPA_TYPE_Float,SPA_AUDIO_MAX_CHANNELS,pwvols);
+	spa_pod_builder_array(&b,sizeof(float),SPA_TYPE_Float,snode->r_channels,pwvols);
 	struct spa_pod *param = spa_pod_builder_pop(&b, &fin);
 	param = spa_pod_builder_pop(&b, &f);
 	pw_device_set_param((struct pw_device*)snode->device->proxy,SPA_PARAM_Route,0,param);
@@ -540,14 +531,7 @@ static void pipewire_set_sink_mute(struct wlpavuo_audio_sink *sink, char mute) {
 	struct spa_pod_frame f;
 	struct spa_pod_frame fin;
 	spa_pod_builder_push_object(&b, &f, SPA_TYPE_OBJECT_ParamRoute, SPA_PARAM_Route);
-	spa_pod_builder_prop(&b,SPA_PARAM_ROUTE_index,0);
-	spa_pod_builder_int(&b, snode->r_index);
-	spa_pod_builder_prop(&b,SPA_PARAM_ROUTE_device,0);
-	spa_pod_builder_int(&b, snode->r_device);
-	spa_pod_builder_prop(&b,SPA_PARAM_ROUTE_direction,0);
-	spa_pod_builder_id(&b, snode->r_direction);
-	spa_pod_builder_prop(&b,SPA_PARAM_ROUTE_name,0);
-	spa_pod_builder_string(&b, snode->r_name);
+	build_route_pod(&b, snode);
 	spa_pod_builder_prop(&b, SPA_PARAM_ROUTE_props,0);
 	spa_pod_builder_push_object(&b, &fin, SPA_TYPE_OBJECT_Props, SPA_PARAM_ROUTE_props);
 	spa_pod_builder_prop(&b,SPA_PROP_mute,0);
