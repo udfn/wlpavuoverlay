@@ -1,5 +1,5 @@
-#ifndef _WLPV_WLPAVUOVERLAY_H
-#define _WLPV_WLPAVUOVERLAY_H
+#ifndef _NWL_NWL_H
+#define _NWL_NWL_H
 #define UNUSED(x) (void)(x)
 #include <stdbool.h>
 #include <EGL/egl.h>
@@ -7,7 +7,7 @@
 #include <wayland-util.h>
 #include "seat.h"
 
-struct wlpavuo_state {
+struct nwl_state {
 	struct wl_display *display;
 	struct wl_registry *registry;
 	struct wl_compositor *compositor;
@@ -17,9 +17,9 @@ struct wlpavuo_state {
 	struct zxdg_decoration_manager_v1 *decoration;
 	struct wp_viewporter *viewporter;
 	struct wl_subcompositor *subcompositor;
-	struct wl_list seats; // wlpavuo_seat
-	struct wl_list outputs; // wlpavuo_output
-	struct wl_list surfaces; // wlpavuo_surface
+	struct wl_list seats; // nwl_seat
+	struct wl_list outputs; // nwl_output
+	struct wl_list surfaces; // nwl_surface
 	struct xkb_context *keyboard_context;
 	struct {
 		EGLDisplay display;
@@ -33,22 +33,22 @@ struct wlpavuo_state {
 	uint32_t cursor_theme_size;
 	uint32_t num_surfaces;
 	char destroy_surfaces;
-	struct wlpavuo_poll *poll;
+	struct nwl_poll *poll;
 	bool use_pipewire;
 };
 
-struct wlpavuo_output {
+struct nwl_output {
 	struct wl_output *output;
 	struct wl_list link;
 	int scale;
 };
 
-char wlpavuo_wayland_init(struct wlpavuo_state *state);
-void wlpavuo_wayland_uninit(struct wlpavuo_state *state);
-void wlpavuo_wayland_run(struct wlpavuo_state *state);
-void wlpavuo_add_seat_fd(struct wlpavuo_seat *seat);
+char nwl_wayland_init(struct nwl_state *state);
+void nwl_wayland_uninit(struct nwl_state *state);
+void nwl_wayland_run(struct nwl_state *state);
+void nwl_add_seat_fd(struct nwl_seat *seat);
 // To be very inconsistent, this returns true on success..
-bool wlpavuoverlay_egl_try_init(struct wlpavuo_state *state);
-void wlpavuoverlay_egl_uninit(struct wlpavuo_state *state);
+bool nwl_egl_try_init(struct nwl_state *state);
+void nwl_egl_uninit(struct nwl_state *state);
 
 #endif

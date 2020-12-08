@@ -2,31 +2,31 @@
 #include "xdg-decoration-unstable-v1.h"
 #include "xdg-shell.h"
 #include "viewporter.h"
-#include "wlpavuoverlay.h"
+#include "nwl.h"
 #include "surface.h"
 
 static void handle_layer_configure(void *data, struct zwlr_layer_surface_v1 *layer, uint32_t serial, uint32_t width, uint32_t height ) {
-	struct wlpavuo_surface *surf = (struct wlpavuo_surface*)data;
+	struct nwl_surface *surf = (struct nwl_surface*)data;
 	zwlr_layer_surface_v1_ack_configure(layer, serial);
 	if (surf->impl.configure) {
 		surf->impl.configure(surf,width,height);
-		wlpavuo_surface_apply_size(surf);
-		wlpavuo_surface_set_need_draw(surf,true);
+		nwl_surface_apply_size(surf);
+		nwl_surface_set_need_draw(surf,true);
 		wl_surface_commit(surf->wl.surface);
 		return;
 	} else if (surf->width != width || surf->height != height) {
 		surf->width = width;
 		surf->height = height;
 	}
-	wlpavuo_surface_apply_size(surf);
-	wlpavuo_surface_set_need_draw(surf,true);
+	nwl_surface_apply_size(surf);
+	nwl_surface_set_need_draw(surf,true);
 	wl_surface_commit(surf->wl.surface);
 }
 
 static void handle_layer_closed(void *data, struct zwlr_layer_surface_v1 *layer) {
 	UNUSED(layer);
-	struct wlpavuo_surface *surf = (struct wlpavuo_surface*)data;
-	wlpavuo_surface_destroy_later(surf);
+	struct nwl_surface *surf = data;
+	nwl_surface_destroy_later(surf);
 }
 
 static const struct zwlr_layer_surface_v1_listener layer_listener = {
@@ -35,10 +35,10 @@ static const struct zwlr_layer_surface_v1_listener layer_listener = {
 };
 
 static void handle_surface_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial) {
-	struct wlpavuo_surface *surf = (struct wlpavuo_surface*)data;
+	struct nwl_surface *surf = data;
 	xdg_surface_ack_configure(xdg_surface, serial);
-	wlpavuo_surface_apply_size(surf);
-	wlpavuo_surface_set_need_draw(surf,true);
+	nwl_surface_apply_size(surf);
+	nwl_surface_set_need_draw(surf,true);
 }
 
 static const struct xdg_surface_listener surface_listener = {
@@ -48,34 +48,34 @@ static const struct xdg_surface_listener surface_listener = {
 static void handle_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel,
 		int32_t width, int32_t height, struct wl_array *states) {
 	UNUSED(xdg_toplevel);
-	struct wlpavuo_surface *surf = (struct wlpavuo_surface*)data;
+	struct nwl_surface *surf = data;
 		uint32_t *state = 0;
-	enum wlpavuo_surface_states newstates = 0;
+	enum nwl_surface_states newstates = 0;
 	wl_array_for_each(state, states) {
 		switch (*state) {
 			case XDG_TOPLEVEL_STATE_MAXIMIZED:
-				newstates |= WLPAVUO_SURFACE_STATE_MAXIMIZED;
+				newstates |= NWL_SURFACE_STATE_MAXIMIZED;
 				break;
 			case XDG_TOPLEVEL_STATE_ACTIVATED:
-				newstates |= WLPAVUO_SURFACE_STATE_ACTIVE;
+				newstates |= NWL_SURFACE_STATE_ACTIVE;
 				break;
 			case XDG_TOPLEVEL_STATE_RESIZING:
-				newstates |= WLPAVUO_SURFACE_STATE_RESIZING;
+				newstates |= NWL_SURFACE_STATE_RESIZING;
 				break;
 			case XDG_TOPLEVEL_STATE_FULLSCREEN:
-				newstates |= WLPAVUO_SURFACE_STATE_FULLSCREEN;
+				newstates |= NWL_SURFACE_STATE_FULLSCREEN;
 				break;
 			case XDG_TOPLEVEL_STATE_TILED_LEFT:
-				newstates |= WLPAVUO_SURFACE_STATE_TILE_LEFT;
+				newstates |= NWL_SURFACE_STATE_TILE_LEFT;
 				break;
 			case XDG_TOPLEVEL_STATE_TILED_RIGHT:
-				newstates |= WLPAVUO_SURFACE_STATE_TILE_RIGHT;
+				newstates |= NWL_SURFACE_STATE_TILE_RIGHT;
 				break;
 			case XDG_TOPLEVEL_STATE_TILED_TOP:
-				newstates |= WLPAVUO_SURFACE_STATE_TILE_TOP;
+				newstates |= NWL_SURFACE_STATE_TILE_TOP;
 				break;
 			case XDG_TOPLEVEL_STATE_TILED_BOTTOM:
-				newstates |= WLPAVUO_SURFACE_STATE_TILE_BOTTOM;
+				newstates |= NWL_SURFACE_STATE_TILE_BOTTOM;
 				break;
 		}
 	}
@@ -96,8 +96,8 @@ static void handle_toplevel_configure(void *data, struct xdg_toplevel *xdg_tople
 
 static void handle_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel) {
 	UNUSED(xdg_toplevel);
-	struct wlpavuo_surface *surf = (struct wlpavuo_surface*)data;
-	wlpavuo_surface_destroy_later(surf);
+	struct nwl_surface *surf = data;
+	nwl_surface_destroy_later(surf);
 }
 
 static const struct xdg_toplevel_listener toplevel_listener = {
@@ -110,11 +110,11 @@ static void handle_decoration_configure(
 		struct zxdg_toplevel_decoration_v1 *zxdg_toplevel_decoration_v1,
 		uint32_t mode) {
 	UNUSED(zxdg_toplevel_decoration_v1);
-	struct wlpavuo_surface *surf = (struct wlpavuo_surface*)data;
+	struct nwl_surface *surf = (struct nwl_surface*)data;
 	if (mode == ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE) {
-		surf->flags |= WLPAVUO_SURFACE_FLAG_CSD;
+		surf->flags |= NWL_SURFACE_FLAG_CSD;
 	} else {
-		surf->flags = surf->flags & ~WLPAVUO_SURFACE_FLAG_CSD;
+		surf->flags = surf->flags & ~NWL_SURFACE_FLAG_CSD;
 	}
 }
 static const struct zxdg_toplevel_decoration_v1_listener decoration_listener = {
@@ -122,7 +122,7 @@ static const struct zxdg_toplevel_decoration_v1_listener decoration_listener = {
 };
 
 
-char wlpavuo_surface_role_layershell(struct wlpavuo_surface *surface, struct wl_output *output, uint32_t layer) {
+char nwl_surface_role_layershell(struct nwl_surface *surface, struct wl_output *output, uint32_t layer) {
 	if (!surface->state->layer_shell) {
 		return 1;
 	}
@@ -132,7 +132,7 @@ char wlpavuo_surface_role_layershell(struct wlpavuo_surface *surface, struct wl_
 	return 0;
 }
 
-char wlpavuo_surface_role_toplevel(struct wlpavuo_surface *surface) {
+char nwl_surface_role_toplevel(struct nwl_surface *surface) {
 	if (!surface->state->xdg_wm_base) {
 		return 1;
 	}

@@ -35,7 +35,7 @@ struct wlpavuo_ui {
 		uint32_t pointer_serial;
 		int scroll_hori;
 		int scroll_vert;
-		struct wlpavuo_seat *last_input;
+		struct nwl_seat *last_input;
 		int adjust_vol;
 		int selected;
 		char mute_selected;
@@ -140,12 +140,12 @@ float calc_text_length(nk_handle handle, float height, const char *text, int len
 
 static void copy_wlpavuo_input_to_nk(struct wlpavuo_ui *ui, struct nk_context *ctx) {
 	nk_input_begin(ctx);
-	if (ui->input.pointer_buttons & WLPAVUO_MOUSE_LEFT) {
+	if (ui->input.pointer_buttons & NWL_MOUSE_LEFT) {
 		nk_input_button(ctx, NK_BUTTON_LEFT, ui->input.pointer_down_x,ui->input.pointer_down_y, 1);
 	} else {
 		nk_input_button(ctx, NK_BUTTON_LEFT, ui->input.pointer_x,ui->input.pointer_y, 0);
 	}
-	if (ui->input.pointer_buttons & WLPAVUO_MOUSE_RIGHT) {
+	if (ui->input.pointer_buttons & NWL_MOUSE_RIGHT) {
 		nk_input_button(ctx, NK_BUTTON_RIGHT, ui->input.pointer_down_x, ui->input.pointer_down_y, 1);
 	} else {
 		nk_input_button(ctx, NK_BUTTON_RIGHT, ui->input.pointer_x,ui->input.pointer_y, 0);
@@ -174,20 +174,20 @@ static void set_nk_color(struct nk_color *color,nk_byte r,nk_byte g, nk_byte b, 
 
 #define WINDOW_RESIZE_BORDER 4
 #define WINDOW_CORNER_RESIZE 25
-static void check_window_move(struct wlpavuo_surface *surface, struct nk_context *ctx) {
-	if (!(surface->flags & WLPAVUO_SURFACE_FLAG_CSD)) {
+static void check_window_move(struct nwl_surface *surface, struct nk_context *ctx) {
+	if (!(surface->flags & NWL_SURFACE_FLAG_CSD)) {
 		return;
 	}
 	struct nk_window *mainwin = nk_window_find(ctx, "mainwin");
 	if (mainwin->flags & (NK_WINDOW_CLOSED|NK_WINDOW_HIDDEN)) {
-		wlpavuo_surface_destroy_later(surface);
+		nwl_surface_destroy_later(surface);
 		return;
 	}
 	if (!surface->wl.xdg_surface) {
 		return;
 	}
 	struct wlpavuo_ui *ui = surface->userdata;
-	if (mainwin && ui->input.pointer_buttons & WLPAVUO_MOUSE_LEFT) {
+	if (mainwin && ui->input.pointer_buttons & NWL_MOUSE_LEFT) {
 		int left_mouse_click_in_cursor;
 		// check resize...
 		uint32_t edges = 0;
@@ -256,7 +256,7 @@ static void check_window_move(struct wlpavuo_surface *surface, struct nk_context
 
 }
 
-void wlpavuo_ui_destroy(struct wlpavuo_surface *surface) {
+void wlpavuo_ui_destroy(struct nwl_surface *surface) {
 	struct wlpavuo_ui *ui = surface->userdata;
 	ui->backend->uninit();
 	free(ui->context);
@@ -266,7 +266,7 @@ void wlpavuo_ui_destroy(struct wlpavuo_surface *surface) {
 	surface->userdata = NULL;
 }
 
-void do_volume_control(struct wlpavuo_surface *surface, struct nk_context *ctx,
+void do_volume_control(struct nwl_surface *surface, struct nk_context *ctx,
 		struct nk_user_font *font, struct nk_user_font *fontb, char *label, unsigned long *volume, int *mute) {
 	nk_style_set_font(ctx, font);
 	nk_layout_row_begin(ctx, NK_STATIC, 22, 2);
@@ -312,14 +312,14 @@ void do_keyboard_input(struct wlpavuo_ui *ui, struct nk_context *ctx, unsigned l
 	}
 }
 
-void wlpavuo_ui_input_keyboard(struct wlpavuo_surface *surface, struct wlpavuo_keyboard_event *event) {
+void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_keyboard_event *event) {
 	struct wlpavuo_ui *ui = surface->userdata;
 	if (!ui) {
 		return;
 	}
 	// This stuff shouldn't depend on the interface rendering..
 	// It should also be rebindable..
-	if (event->type == WLPAVUO_KEYBOARD_EVENT_KEYDOWN || event->type == WLPAVUO_KEYBOARD_EVENT_KEYREPEAT) {
+	if (event->type == NWL_KEYBOARD_EVENT_KEYDOWN || event->type == NWL_KEYBOARD_EVENT_KEYREPEAT) {
 		switch (event->keysym) {
 			case XKB_KEY_h:
 				ui->input.adjust_vol -= 2500;
@@ -349,20 +349,20 @@ void wlpavuo_ui_input_keyboard(struct wlpavuo_surface *surface, struct wlpavuo_k
 				ui->input.mute_selected = 1;
 				break;
 		}
-	} else if (event->type == WLPAVUO_KEYBOARD_EVENT_KEYUP) {
+	} else if (event->type == NWL_KEYBOARD_EVENT_KEYUP) {
 		if (event->keysym == XKB_KEY_Escape) {
 				surface->state->num_surfaces = 0;
 		}
 	}
-	wlpavuo_surface_set_need_draw(surface,true);
+	nwl_surface_set_need_draw(surface,true);
 }
 
-void wlpavuo_ui_input_pointer(struct wlpavuo_surface *surface, struct wlpavuo_pointer_event *event) {
+void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_pointer_event *event) {
 	struct wlpavuo_ui *ui = surface->userdata;
 	if (!ui) {
 		return;
 	}
-	if (event->changed & WLPAVUO_POINTER_EVENT_FOCUS) {
+	if (event->changed & NWL_POINTER_EVENT_FOCUS) {
 		if (event->focus) {
 			ui->input.pointer_focus++;
 		} else {
@@ -370,35 +370,35 @@ void wlpavuo_ui_input_pointer(struct wlpavuo_surface *surface, struct wlpavuo_po
 			ui->input.pointer_buttons = 0;
 		}
 	}
-	if (event->changed & WLPAVUO_POINTER_EVENT_MOTION) {
+	if (event->changed & NWL_POINTER_EVENT_MOTION) {
 		ui->input.pointer_x = wl_fixed_to_int(event->surface_x);
 		ui->input.pointer_y = wl_fixed_to_int(event->surface_y);
 	}
-	if (event->changed & WLPAVUO_POINTER_EVENT_BUTTON) {
-		if (!(ui->input.pointer_buttons & WLPAVUO_MOUSE_LEFT) && (event->buttons & WLPAVUO_MOUSE_LEFT)) {
+	if (event->changed & NWL_POINTER_EVENT_BUTTON) {
+		if (!(ui->input.pointer_buttons & NWL_MOUSE_LEFT) && (event->buttons & NWL_MOUSE_LEFT)) {
 			ui->input.pointer_down_x = ui->input.pointer_x;
 			ui->input.pointer_down_y = ui->input.pointer_y;
 		}
 		ui->input.pointer_buttons = event->buttons;
 	}
-	if (event->changed & WLPAVUO_POINTER_EVENT_AXIS) {
+	if (event->changed & NWL_POINTER_EVENT_AXIS) {
 		ui->input.scroll_hori += wl_fixed_to_int(event->axis_hori);
 		ui->input.scroll_vert += wl_fixed_to_int(event->axis_vert);
 	}
 	ui->input.pointer_serial = event->serial;
 	ui->input.last_input = event->seat;
-	wlpavuo_surface_set_need_draw(surface,true);
+	nwl_surface_set_need_draw(surface,true);
 }
 
 static void handle_audio_update(void *data) {
-	struct wlpavuo_surface *surf = data;
+	struct nwl_surface *surf = data;
 	// Shouldn't render on the audio thread!
-	wlpavuo_surface_set_need_draw(surf,false);
+	nwl_surface_set_need_draw(surf,false);
 	// Is this safe? Probably not!
 	wl_display_flush(surf->state->display);
 }
 
-char wlpavuo_ui_run(struct wlpavuo_surface *surface, cairo_t *cr) {
+char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 	struct wlpavuo_ui *ui = surface->userdata;
 	if(!ui) {
 		surface->userdata = calloc(1,sizeof(struct wlpavuo_ui));
@@ -428,7 +428,7 @@ char wlpavuo_ui_run(struct wlpavuo_surface *surface, cairo_t *cr) {
 	ui->font.userdata.ptr = cr;
 	ui->fontsmol.userdata.ptr = cr;
 	struct nk_context *ctx = ui->context;
-	if (surface->states & WLPAVUO_SURFACE_STATE_ACTIVE) {
+	if (surface->states & NWL_SURFACE_STATE_ACTIVE) {
 		if (!ui->active) {
 			set_nk_color(&ui->color_table[NK_COLOR_HEADER], 40, 40, 40, 255);
 			nk_style_from_table(ctx, ui->color_table);
@@ -445,7 +445,7 @@ char wlpavuo_ui_run(struct wlpavuo_surface *surface, cairo_t *cr) {
 	aimpl->lock();
 	copy_wlpavuo_input_to_nk(ui, ctx);
 	int32_t scale = surface->scale;
-	nk_flags winflags = surface->flags & WLPAVUO_SURFACE_FLAG_CSD ? NK_WINDOW_TITLE|NK_WINDOW_BORDER|NK_WINDOW_CLOSABLE:
+	nk_flags winflags = surface->flags & NWL_SURFACE_FLAG_CSD ? NK_WINDOW_TITLE|NK_WINDOW_BORDER|NK_WINDOW_CLOSABLE:
 		surface->wl.layer_surface || surface->wl.subsurface ? NK_WINDOW_BORDER : 0;
 	int inset = winflags ? 1 : 0;
 	cairo_scale(cr, scale,scale);
@@ -464,7 +464,7 @@ char wlpavuo_ui_run(struct wlpavuo_surface *surface, cairo_t *cr) {
 			snprintf(buf,255,"Failed connecting to %s :(", aimpl->get_name());
 			nk_label(ctx,buf, NK_TEXT_ALIGN_CENTERED);
 			if (nk_button_label(ctx, "Quit")) {
-				wlpavuo_surface_destroy_later(surface);
+				nwl_surface_destroy_later(surface);
 			}
 		} else if (status == WLPAVUO_AUDIO_STATUS_READY) {
 			struct wl_list *sinks = aimpl->get_sinks();
@@ -533,7 +533,7 @@ char wlpavuo_ui_run(struct wlpavuo_surface *surface, cairo_t *cr) {
 			}
 			if (counter-1 < ui->input.selected) {
 				ui->input.selected = counter-1;
-				wlpavuo_surface_set_need_draw(surface,true);
+				nwl_surface_set_need_draw(surface,true);
 			}
 			ui->num_items = counter;
 		}

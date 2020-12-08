@@ -47,4 +47,4 @@ Many, but you probably already have most of these...
 ## License?
 Unlicense. See the file `UNLICENSE` for the full text, or https://unlicense.org
 
-The XML protocol files in the `protocol` directory have different licenses though.
+The XML protocol files in the `subprojects/nwl/protocol` directory have different licenses though.

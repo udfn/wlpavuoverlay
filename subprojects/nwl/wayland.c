@@ -6,14 +6,14 @@
 #include <string.h>
 #include <sys/epoll.h>
 #include <unistd.h>
-#include "wlpavuoverlay.h"
+#include "nwl.h"
 #include "surface.h"
 #include "wlr-layer-shell-unstable-v1.h"
 #include "xdg-shell.h"
 #include "xdg-decoration-unstable-v1.h"
 #include "viewporter.h"
 
-struct wlpavuo_poll {
+struct nwl_poll {
 	int efd;
 	int dfd;
 	int numfds;
@@ -78,7 +78,7 @@ static void handle_output_scale(
 		struct wl_output *wl_output,
 		int32_t factor) {
 	UNUSED(wl_output);
-	struct wlpavuo_output *output = (struct wlpavuo_output*)data;
+	struct nwl_output *output = (struct nwl_output*)data;
 	output->scale = factor;
 }
 
@@ -89,8 +89,8 @@ static const struct wl_output_listener output_listener = {
 	handle_output_scale
 };
 
-static void wlpavuo_output_create(struct wl_output *output, struct wlpavuo_state *state) {
-	struct wlpavuo_output *wlpvoutput = calloc(1,sizeof(struct wlpavuo_output));
+static void nwl_output_create(struct wl_output *output, struct nwl_state *state) {
+	struct nwl_output *wlpvoutput = calloc(1,sizeof(struct nwl_output));
 	wl_output_add_listener(output, &output_listener, wlpvoutput);
 	wl_output_set_user_data(output, wlpvoutput);
 	wl_list_insert(&state->outputs, &wlpvoutput->link);
@@ -98,7 +98,7 @@ static void wlpavuo_output_create(struct wl_output *output, struct wlpavuo_state
 
 static void handle_global_add(void *data, struct wl_registry *reg,
 		uint32_t name, const char *interface, uint32_t version) {
-	struct wlpavuo_state *state = (struct wlpavuo_state*) data;
+	struct nwl_state *state = data;
 	if (strcmp(interface,wl_compositor_interface.name) == 0) {
 		state->compositor = wl_registry_bind(reg, name, &wl_compositor_interface, version);
 	} else if (strcmp(interface,zwlr_layer_shell_v1_interface.name) == 0) {
@@ -108,14 +108,14 @@ static void handle_global_add(void *data, struct wl_registry *reg,
 		xdg_wm_base_add_listener(state->xdg_wm_base, &wm_base_listener, state);
 	} else if (strcmp(interface,wl_seat_interface.name) == 0) {
 		struct wl_seat *newseat = wl_registry_bind(reg, name, &wl_seat_interface, version);
-		wlpavuo_seat_create(newseat, state);
+		nwl_seat_create(newseat, state);
 	} else if (strcmp(interface,wl_shm_interface.name) == 0) {
 		state->shm = wl_registry_bind(reg, name, &wl_shm_interface, wl_shm_interface.version);
 	} else if (strcmp(interface,zxdg_decoration_manager_v1_interface.name) == 0) {
 		state->decoration = wl_registry_bind(reg,name,&zxdg_decoration_manager_v1_interface, zxdg_decoration_manager_v1_interface.version);
 	} else if (strcmp(interface,wl_output_interface.name) == 0) {
 		struct wl_output *newoutput = wl_registry_bind(reg, name, &wl_output_interface, version);
-		wlpavuo_output_create(newoutput, state);
+		nwl_output_create(newoutput, state);
 	} else if (strcmp(interface,wp_viewporter_interface.name) == 0) {
 		state->viewporter = wl_registry_bind(reg, name, &wp_viewporter_interface, version);
 	} else if (strcmp(interface,wl_subcompositor_interface.name) == 0) {
@@ -135,8 +135,8 @@ static const struct wl_registry_listener reg_listener = {
 	handle_global_remove
 };
 
-void wlpavuo_add_seat_fd(struct wlpavuo_seat *seat) {
-	struct wlpavuo_state *state = seat->state;
+void nwl_add_seat_fd(struct nwl_seat *seat) {
+	struct nwl_state *state = seat->state;
 	state->poll->ev = realloc(state->poll->ev, sizeof(struct epoll_event)* ++state->poll->numfds);
 	struct epoll_event ep;
 	ep.data.ptr = seat;
@@ -144,21 +144,21 @@ void wlpavuo_add_seat_fd(struct wlpavuo_seat *seat) {
 	epoll_ctl(state->poll->efd, EPOLL_CTL_ADD, seat->keyboard_repeat_fd, &ep);
 }
 
-static void wlpavuo_wayland_poll_display(struct wlpavuo_state *state) {
+static void nwl_wayland_poll_display(struct nwl_state *state) {
 	wl_display_dispatch(state->display);
 	if (state->destroy_surfaces) {
-		struct wlpavuo_surface *surface;
-		struct wlpavuo_surface *surfacetmp;
+		struct nwl_surface *surface;
+		struct nwl_surface *surfacetmp;
 		wl_list_for_each_safe(surface, surfacetmp, &state->surfaces, link) {
-			if (surface->flags & WLPAVUO_SURFACE_FLAG_DESTROY) {
-				wlpavuo_surface_destroy(surface);
+			if (surface->flags & NWL_SURFACE_FLAG_DESTROY) {
+				nwl_surface_destroy(surface);
 			}
 		}
 		state->destroy_surfaces = 0;
 	}
 }
 
-void wlpavuo_wayland_run(struct wlpavuo_state *state) {
+void nwl_wayland_run(struct nwl_state *state) {
 	wl_display_flush(state->display);
 	// Everything about this seems very flaky.. but it works!
 	while (state->num_surfaces) {
@@ -171,15 +171,15 @@ void wlpavuo_wayland_run(struct wlpavuo_state *state) {
 		}
 		for (int i = 0; i < nfds;i++) {
 			if (state->poll->ev[i].data.fd == state->poll->dfd) {
-				wlpavuo_wayland_poll_display(state);
+				nwl_wayland_poll_display(state);
 			} else {
-				wlpavuo_seat_send_key_repeat(state->poll->ev[i].data.ptr);
+				nwl_seat_send_key_repeat(state->poll->ev[i].data.ptr);
 			}
 		}
 	}
 }
 
-char wlpavuo_wayland_init(struct wlpavuo_state *state) {
+char nwl_wayland_init(struct nwl_state *state) {
 	state->display = wl_display_connect(NULL);
 	if (!state->display) {
 		fprintf(stderr,"couldn't connect to Wayland display.\n");
@@ -191,7 +191,7 @@ char wlpavuo_wayland_init(struct wlpavuo_state *state) {
 	wl_list_init(&state->surfaces);
 	wl_registry_add_listener(state->registry, &reg_listener, state);
 	wl_display_roundtrip(state->display);
-	state->poll = calloc(1,sizeof(struct wlpavuo_poll));
+	state->poll = calloc(1,sizeof(struct nwl_poll));
 	state->poll->efd = epoll_create1(0);
 	state->poll->ev = calloc(1,sizeof(struct epoll_event));
 	struct epoll_event ep = { 0 };
@@ -203,22 +203,22 @@ char wlpavuo_wayland_init(struct wlpavuo_state *state) {
 	return 0;
 }
 
-void wlpavuo_wayland_uninit(struct wlpavuo_state *state) {
-	struct wlpavuo_surface *surface;
-	struct wlpavuo_surface *surfacetmp;
+void nwl_wayland_uninit(struct nwl_state *state) {
+	struct nwl_surface *surface;
+	struct nwl_surface *surfacetmp;
 	wl_list_for_each_safe(surface, surfacetmp, &state->surfaces, link) {
-		wlpavuo_surface_destroy(surface);
+		nwl_surface_destroy(surface);
 	}
-	wlpavuoverlay_egl_uninit(state);
-	struct wlpavuo_seat *seat;
-	struct wlpavuo_seat *seattmp;
+	nwl_egl_uninit(state);
+	struct nwl_seat *seat;
+	struct nwl_seat *seattmp;
 	xkb_context_unref(state->keyboard_context);
 	wl_list_for_each_safe(seat,seattmp, &state->seats, link) {
 		wl_list_remove(&seat->link);
-		wlpavuo_seat_destroy(seat);
+		nwl_seat_destroy(seat);
 	}
-	struct wlpavuo_output *output;
-	struct wlpavuo_output *outputtmp;
+	struct nwl_output *output;
+	struct nwl_output *outputtmp;
 	wl_list_for_each_safe(output,outputtmp, &state->outputs, link) {
 		wl_list_remove(&output->link);
 		free(output);

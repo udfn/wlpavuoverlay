@@ -9,7 +9,6 @@
 #include <spa/param/audio/raw.h>
 #include "audio.h"
 // TODO!
-#define UNIMPLEMENTED() fprintf(stderr,"PW unimplemented func %s\n", __FUNCTION__);
 #define UNUSED(x) (void)(x)
 
 enum pipewire_global_type {
@@ -157,6 +156,7 @@ static void device_event_param(void *data, int seq, uint32_t id, uint32_t index,
 	float vol[SPA_AUDIO_MAX_CHANNELS];
 	struct spa_pod_prop *prop;
 	struct spa_pod_object *obj = (struct spa_pod_object *) param;
+	// Perhaps the pod could simply be copied and then modified later to set mute or volume..
 	SPA_POD_OBJECT_FOREACH(obj, prop) {
 		switch (prop->key) {
 			case SPA_PARAM_ROUTE_props: {

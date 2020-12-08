@@ -2,9 +2,9 @@
 #include <cairo/cairo-gl.h>
 #include <cairo.h>
 #include <stdio.h>
-#include "wlpavuoverlay.h"
+#include "nwl.h"
 
-static char wlpavuoverlay_egl_init(struct wlpavuo_state *state) {
+static char nwl_egl_init(struct nwl_state *state) {
 	state->egl.display = eglGetPlatformDisplayEXT(EGL_PLATFORM_WAYLAND_KHR,state->display,NULL);
 	EGLint major,minor;
 	if (!eglInitialize(state->egl.display, &major, &minor)) {
@@ -47,7 +47,7 @@ static char wlpavuoverlay_egl_init(struct wlpavuo_state *state) {
 	return 0;
 }
 
-void wlpavuoverlay_egl_uninit(struct wlpavuo_state *state) {
+void nwl_egl_uninit(struct nwl_state *state) {
 	if (state->egl.context) {
 		eglDestroyContext(state->egl.display, state->egl.context);
 	}
@@ -57,15 +57,15 @@ void wlpavuoverlay_egl_uninit(struct wlpavuo_state *state) {
 	eglTerminate(state->egl.display);
 }
 
-bool wlpavuoverlay_egl_try_init(struct wlpavuo_state *state) {
-	if (wlpavuoverlay_egl_init(state)) {
-		wlpavuoverlay_egl_uninit(state);
+bool nwl_egl_try_init(struct nwl_state *state) {
+	if (nwl_egl_init(state)) {
+		nwl_egl_uninit(state);
 		state->egl.inited = 2;
 		return false;
 	}
 	if (cairo_device_status(state->egl.cairo_dev) != CAIRO_STATUS_SUCCESS) {
 		fprintf(stderr,"couldn't get Cairo device status %i\n",cairo_device_status(state->egl.cairo_dev));
-		wlpavuoverlay_egl_uninit(state);
+		nwl_egl_uninit(state);
 		state->egl.inited = 2;
 		return false;
 	}

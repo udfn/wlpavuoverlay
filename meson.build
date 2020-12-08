@@ -1,46 +1,33 @@
 project('wlpavuoverlay', 'c',
-	default_options:  [
+	default_options: [
 		'c_std=c11'
-	])
+	],
+	version: '0.1 pre-alpha prototype'
+)
 # shouldn't these warnings be suppressed by setting the c_std to gnu?
 cc = meson.get_compiler('c')
 if cc.has_argument('-Wno-gnu-statement-expression')
 	add_global_arguments(['-Wno-gnu-statement-expression','-Wno-gnu-zero-variadic-macro-arguments'], language:'c')
 endif
 wayland_client = dependency('wayland-client')
-wayland_cursor = dependency('wayland-cursor')
 cairo = dependency('cairo')
 egl = dependency('egl')
-gl = dependency('gl')
-rt = cc.find_library('rt')
-paper = cc.find_library('libm')
-wlegl = dependency('wayland-egl')
-epoxy = dependency('epoxy')
 xkbc = dependency('xkbcommon')
 pulseaudio = dependency('libpulse')
 pipewire = dependency('libpipewire-0.3',required:false)
 includes = include_directories(['include'])
-subdir('protocol')
+nwl = subproject('nwl')
+nwl_dep = nwl.get_variable('nwl_dep')
 srcfiles = [
 	'main.c',
-	'egl.c',
-	'surface.c',
-	'ui.c',
-	'seat.c',
-	'shell.c',
-	'wayland.c'
+	'ui.c'
 ]
 deps = [
 	wayland_client,
-	wayland_cursor,
-	wlegl,
 	cairo,
 	egl,
-	gl,
-	rt,
-	paper,
-	epoxy,
 	xkbc,
+	nwl_dep
 ]
 if pipewire.found()
 	srcfiles += 'pipewire.c'
@@ -53,4 +40,4 @@ if pulseaudio.found()
 	add_project_arguments('-DHAVE_PULSEAUDIO=1',language:'c')
 endif
 # error if only one is found?
-executable('wlpavuoverlay',srcfiles,[proto_c,proto_h],dependencies: deps, include_directories:includes,install:true)
+executable('wlpavuoverlay',srcfiles,dependencies: deps, include_directories:includes,install:true)

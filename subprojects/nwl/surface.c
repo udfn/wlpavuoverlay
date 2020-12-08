@@ -13,8 +13,7 @@
 #include <cairo/cairo-gl.h>
 #include "wlr-layer-shell-unstable-v1.h"
 #include "xdg-shell.h"
-#include "wlpavuoverlay.h"
-#include "ui.h"
+#include "nwl.h"
 #include "surface.h"
 
 static void randname(char *buf) {
@@ -57,7 +56,7 @@ static int allocate_shm_file(size_t size) {
 	return fd;
 }
 
-struct wlpavuo_surface_shm {
+struct nwl_surface_shm {
 	int fd;
 	uint8_t *data;
 	struct wl_shm_pool *pool;
@@ -67,14 +66,14 @@ struct wlpavuo_surface_shm {
 	struct wl_buffer *buffer;
 };
 
-static void destroy_shm_pool(struct wlpavuo_surface_shm *shm) {
+static void destroy_shm_pool(struct nwl_surface_shm *shm) {
 	wl_shm_pool_destroy(shm->pool);
 	munmap(shm->data, shm->size);
 	close(shm->fd);
 }
 
-static void allocate_wl_shm_pool(struct wlpavuo_surface *surface) {
-	struct wlpavuo_surface_shm *shm = surface->render.data;
+static void allocate_wl_shm_pool(struct nwl_surface *surface) {
+	struct nwl_surface_shm *shm = surface->render.data;
 	uint32_t scaled_width = surface->width * surface->scale;
 	uint32_t scaled_height = surface->height * surface->scale;
 	int stride = cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, scaled_width);
@@ -91,15 +90,15 @@ static void allocate_wl_shm_pool(struct wlpavuo_surface *surface) {
 	return;
 }
 
-static void shm_surface_destroy(struct wlpavuo_surface *surface) {
-	struct wlpavuo_surface_shm *shm = surface->render.data;
+static void shm_surface_destroy(struct nwl_surface *surface) {
+	struct nwl_surface_shm *shm = surface->render.data;
 	cairo_surface_destroy(surface->cairo_surface);
 	destroy_shm_pool(shm);
 	free(surface->render.data);
 }
 
-static void shm_surface_swapbuffers(struct wlpavuo_surface *surface) {
-	struct wlpavuo_surface_shm *shm = surface->render.data;
+static void shm_surface_swapbuffers(struct nwl_surface *surface) {
+	struct nwl_surface_shm *shm = surface->render.data;
 	if (shm->buffer) {
 		wl_buffer_destroy(shm->buffer);
 	}
@@ -111,35 +110,35 @@ static void shm_surface_swapbuffers(struct wlpavuo_surface *surface) {
 	wl_surface_commit(surface->wl.surface);
 }
 
-static void surface_render_set_shm(struct wlpavuo_surface *surface) {
+static void surface_render_set_shm(struct nwl_surface *surface) {
 	if (surface->render.data) {
 		surface->render.impl.destroy(surface);
 	}
-	surface->render.data = calloc(sizeof(struct wlpavuo_surface_shm),1);
+	surface->render.data = calloc(sizeof(struct nwl_surface_shm),1);
 	surface->render.impl.destroy = shm_surface_destroy;
 	surface->render.impl.applysize = allocate_wl_shm_pool;
 	surface->render.impl.swapbuffers = shm_surface_swapbuffers;
 }
 
-struct wlpavuo_surface_egl {
+struct nwl_surface_egl {
 	struct wl_egl_window *window;
 	EGLSurface surface;
 };
 
-static void egl_surface_destroy(struct wlpavuo_surface *surface) {
-	struct wlpavuo_surface_egl *egl = surface->render.data;
+static void egl_surface_destroy(struct nwl_surface *surface) {
+	struct nwl_surface_egl *egl = surface->render.data;
 	cairo_surface_destroy(surface->cairo_surface);
 	wl_egl_window_destroy(egl->window);
 	eglDestroySurface(surface->state->egl.display, egl->surface);
 	free(surface->render.data);
 }
 
-static void egl_surface_applysize(struct wlpavuo_surface *surface) {
-	struct wlpavuo_surface_egl *egl = surface->render.data;
+static void egl_surface_applysize(struct nwl_surface *surface) {
+	struct nwl_surface_egl *egl = surface->render.data;
 	uint32_t scaled_width = surface->width * surface->scale;
 	uint32_t scaled_height = surface->height * surface->scale;
 	if (!egl->window) {
-		struct wlpavuo_surface_egl *egl = surface->render.data;
+		struct nwl_surface_egl *egl = surface->render.data;
 		egl->window = wl_egl_window_create(surface->wl.surface, scaled_width, scaled_height);
 		egl->surface = eglCreatePlatformWindowSurfaceEXT(surface->state->egl.display, surface->state->egl.config, egl->window, NULL);
 		surface->cairo_surface = cairo_gl_surface_create_for_egl(surface->state->egl.cairo_dev, egl->surface, scaled_width,scaled_height);
@@ -149,11 +148,11 @@ static void egl_surface_applysize(struct wlpavuo_surface *surface) {
 	}
 }
 
-static void egl_surface_swapbuffers(struct wlpavuo_surface *surface) {
+static void egl_surface_swapbuffers(struct nwl_surface *surface) {
 	cairo_gl_surface_swapbuffers(surface->cairo_surface);
 }
 
-static void surface_render_set_egl(struct wlpavuo_surface *surface) {
+static void surface_render_set_egl(struct nwl_surface *surface) {
 	if (surface->render.data) {
 		surface->render.impl.destroy(surface);
 	}
@@ -161,12 +160,12 @@ static void surface_render_set_egl(struct wlpavuo_surface *surface) {
 		surface_render_set_shm(surface);
 		return;
 	} else if (surface->state->egl.inited == 0) {
-		if (!wlpavuoverlay_egl_try_init(surface->state)) {
+		if (!nwl_egl_try_init(surface->state)) {
 			surface_render_set_shm(surface);
 			return;
 		}
 	}
-	surface->render.data = calloc(sizeof(struct wlpavuo_surface_egl),1);
+	surface->render.data = calloc(sizeof(struct nwl_surface_egl),1);
 	surface->render.impl.destroy = egl_surface_destroy;
 	surface->render.impl.applysize = egl_surface_applysize;
 	surface->render.impl.swapbuffers = egl_surface_swapbuffers;
@@ -178,13 +177,13 @@ struct wl_callback_listener callback_listener;
 static void cb_done(void *data, struct wl_callback *cb, uint32_t cb_data) {
 	UNUSED(cb_data);
 	wl_callback_destroy(cb);
-	struct wlpavuo_surface *surf = (struct wlpavuo_surface*)data;
-	if (surf->flags & WLPAVUO_SURFACE_FLAG_NEEDS_DRAW) {
-		surf->flags = surf->flags & ~WLPAVUO_SURFACE_FLAG_NEEDS_DRAW;
+	struct nwl_surface *surf = (struct nwl_surface*)data;
+	if (surf->flags & NWL_SURFACE_FLAG_NEEDS_DRAW) {
+		surf->flags = surf->flags & ~NWL_SURFACE_FLAG_NEEDS_DRAW;
 		surf->impl.render(surf);
 	}
 	surf->wl.frame_cb = NULL;
-	if (surf->flags & WLPAVUO_SURFACE_FLAG_NEEDS_DRAW) {
+	if (surf->flags & NWL_SURFACE_FLAG_NEEDS_DRAW) {
 		surf->wl.frame_cb = wl_surface_frame(surf->wl.surface);
 		wl_callback_add_listener(surf->wl.frame_cb, &callback_listener, surf);
 		wl_surface_commit(surf->wl.surface);
@@ -195,40 +194,40 @@ struct wl_callback_listener callback_listener = {
 	cb_done
 };
 
-struct wlpavuo_surface_output {
+struct nwl_surface_output {
 	struct wl_list link;
-	struct wlpavuo_output *output;
+	struct nwl_output *output;
 };
 
-static void surface_set_scale_from_outputs(struct wlpavuo_surface *surf) {
+static void surface_set_scale_from_outputs(struct nwl_surface *surf) {
 	int scale = 1;
-	struct wlpavuo_surface_output *surfoutput;
+	struct nwl_surface_output *surfoutput;
 	wl_list_for_each(surfoutput, &surf->outputs, link) {
 		if (surfoutput->output->scale > scale) {
 			scale = surfoutput->output->scale;
 		}
 	}
 	surf->scale = scale;
-	wlpavuo_surface_apply_size(surf);
-	surf->flags |= WLPAVUO_SURFACE_FLAG_NEEDS_DRAW;
+	nwl_surface_apply_size(surf);
+	surf->flags |= NWL_SURFACE_FLAG_NEEDS_DRAW;
 }
 
 static void handle_surface_enter(void *data, struct wl_surface *surface, struct wl_output *output) {
 	UNUSED(surface);
-	struct wlpavuo_output *wlpvoutput = wl_output_get_user_data(output);
-	struct wlpavuo_surface *surf = (struct wlpavuo_surface*)data;
-	struct wlpavuo_surface_output *surfoutput = calloc(1,sizeof(struct wlpavuo_surface_output));
+	struct nwl_output *wlpvoutput = wl_output_get_user_data(output);
+	struct nwl_surface *surf = (struct nwl_surface*)data;
+	struct nwl_surface_output *surfoutput = calloc(1,sizeof(struct nwl_surface_output));
 	surfoutput->output = wlpvoutput;
 	wl_list_insert(&surf->outputs, &surfoutput->link);
-	if (!(surf->flags & WLPAVUO_SURFACE_FLAG_NO_AUTOSCALE)) {
+	if (!(surf->flags & NWL_SURFACE_FLAG_NO_AUTOSCALE)) {
 		surface_set_scale_from_outputs(surf);
 	}
 }
 static void handle_surface_leave(void *data, struct wl_surface *surface, struct wl_output *output) {
 	UNUSED(surface);
-	struct wlpavuo_output *wlpvoutput = wl_output_get_user_data(output);
-	struct wlpavuo_surface *surf = (struct wlpavuo_surface*)data;
-	struct wlpavuo_surface_output *surfoutput;
+	struct nwl_output *wlpvoutput = wl_output_get_user_data(output);
+	struct nwl_surface *surf = (struct nwl_surface*)data;
+	struct nwl_surface_output *surfoutput;
 
 	wl_list_for_each(surfoutput, &surf->outputs, link) {
 		if (surfoutput->output == wlpvoutput) {
@@ -237,7 +236,7 @@ static void handle_surface_leave(void *data, struct wl_surface *surface, struct 
 	}
 	wl_list_remove(&surfoutput->link);
 	free(surfoutput);
-	if (!(surf->flags & WLPAVUO_SURFACE_FLAG_NO_AUTOSCALE)) {
+	if (!(surf->flags & NWL_SURFACE_FLAG_NO_AUTOSCALE)) {
 		surface_set_scale_from_outputs(surf);
 	}
 }
@@ -246,19 +245,19 @@ static const struct wl_surface_listener surface_listener = {
 	handle_surface_leave
 };
 
-struct wlpavuo_surface *wlpavuo_surface_create(struct wlpavuo_state *state, char *title, enum wlpavuo_surface_renderer renderer) {
-	struct wlpavuo_surface *newsurf = (struct wlpavuo_surface*)calloc(1,sizeof(struct wlpavuo_surface));
+struct nwl_surface *nwl_surface_create(struct nwl_state *state, char *title, enum nwl_surface_renderer renderer) {
+	struct nwl_surface *newsurf = (struct nwl_surface*)calloc(1,sizeof(struct nwl_surface));
 	newsurf->state = state;
 	newsurf->wl.surface = wl_compositor_create_surface(state->compositor);
 	newsurf->scale = 1;
 	newsurf->title = title;
-	newsurf->flags = WLPAVUO_SURFACE_FLAG_CSD;
+	newsurf->flags = NWL_SURFACE_FLAG_CSD;
 	wl_list_init(&newsurf->subsurfaces);
 	wl_list_init(&newsurf->outputs);
 	wl_list_insert(&state->surfaces, &newsurf->link);
 	wl_surface_set_user_data(newsurf->wl.surface, newsurf);
 	wl_surface_add_listener(newsurf->wl.surface, &surface_listener, newsurf);
-	if (renderer == WLPAVUO_SURFACE_RENDER_SHM) {
+	if (renderer == NWL_SURFACE_RENDER_SHM) {
 		surface_render_set_shm(newsurf);
 	} else {
 		surface_render_set_egl(newsurf);
@@ -267,25 +266,25 @@ struct wlpavuo_surface *wlpavuo_surface_create(struct wlpavuo_state *state, char
 	return newsurf;
 }
 
-void wlpavuo_surface_destroy(struct wlpavuo_surface *surface) {
+void nwl_surface_destroy(struct nwl_surface *surface) {
 	// clear any focuses
-	wlpavuo_seat_clear_focus(surface);
+	nwl_seat_clear_focus(surface);
 	// destroy any possible subsurfaces as well
-	struct wlpavuo_surface *subsurf;
-	struct wlpavuo_surface *subsurftmp;
+	struct nwl_surface *subsurf;
+	struct nwl_surface *subsurftmp;
 	if (!surface->parent) {
 		wl_list_remove(&surface->link);
 	}
 	wl_list_for_each_safe(subsurf, subsurftmp, &surface->subsurfaces, sublink) {
 		wl_list_remove(&subsurf->sublink);
-		wlpavuo_surface_destroy(subsurf);
+		nwl_surface_destroy(subsurf);
 	}
 	if (surface->impl.destroy) {
 		surface->impl.destroy(surface);
 	}
 	surface->render.impl.destroy(surface);
-	struct wlpavuo_surface_output *surfoutput;
-	struct wlpavuo_surface_output *surfoutputtmp;
+	struct nwl_surface_output *surfoutput;
+	struct nwl_surface_output *surfoutputtmp;
 	wl_list_for_each_safe(surfoutput, surfoutputtmp, &surface->outputs, link) {
 		wl_list_remove(&surfoutput->link);
 		free(surfoutput);
@@ -302,15 +301,15 @@ void wlpavuo_surface_destroy(struct wlpavuo_surface *surface) {
 	free(surface);
 }
 
-void wlpavuo_surface_destroy_later(struct wlpavuo_surface *surface) {
-	surface->flags = WLPAVUO_SURFACE_FLAG_DESTROY;
+void nwl_surface_destroy_later(struct nwl_surface *surface) {
+	surface->flags = NWL_SURFACE_FLAG_DESTROY;
 	surface->state->destroy_surfaces = 1;
 	if (surface->wl.frame_cb) {
 		wl_callback_destroy(surface->wl.frame_cb);
 	}
 }
 
-void wlpavuo_surface_set_size(struct wlpavuo_surface *surface, uint32_t width, uint32_t height) {
+void nwl_surface_set_size(struct nwl_surface *surface, uint32_t width, uint32_t height) {
 	surface->desired_height = height;
 	surface->desired_width = width;
 	if (surface->wl.layer_surface) {
@@ -322,27 +321,27 @@ void wlpavuo_surface_set_size(struct wlpavuo_surface *surface, uint32_t width, u
 	}
 }
 
-void wlpavuo_surface_apply_size(struct wlpavuo_surface *surface) {
+void nwl_surface_apply_size(struct nwl_surface *surface) {
 	wl_surface_set_buffer_scale(surface->wl.surface, surface->scale);
 	surface->render.impl.applysize(surface);
-	struct wlpavuo_surface *sub;
+	struct nwl_surface *sub;
 	wl_list_for_each(sub, &surface->subsurfaces, sublink) {
 		sub->scale = surface->scale;
-		wlpavuo_surface_apply_size(sub);
+		nwl_surface_apply_size(sub);
 	}
 }
 
-void wlpavuo_surface_swapbuffers(struct wlpavuo_surface *surface) {
+void nwl_surface_swapbuffers(struct nwl_surface *surface) {
 	surface->frame++;
 	surface->render.impl.swapbuffers(surface);
 }
 
-void wlpavuo_surface_set_need_draw(struct wlpavuo_surface *surface, bool render) {
+void nwl_surface_set_need_draw(struct nwl_surface *surface, bool render) {
 	if (surface->parent) {
-		wlpavuo_surface_set_need_draw(surface->parent,render);
+		nwl_surface_set_need_draw(surface->parent,render);
 	} else {
 		if (surface->wl.frame_cb) {
-			surface->flags |= WLPAVUO_SURFACE_FLAG_NEEDS_DRAW;
+			surface->flags |= NWL_SURFACE_FLAG_NEEDS_DRAW;
 			return;
 		}
 		surface->wl.frame_cb = wl_surface_frame(surface->wl.surface);
@@ -351,12 +350,12 @@ void wlpavuo_surface_set_need_draw(struct wlpavuo_surface *surface, bool render)
 		if (render) {
 			surface->impl.render(surface);
 		} else {
-			surface->flags |= WLPAVUO_SURFACE_FLAG_NEEDS_DRAW;
+			surface->flags |= NWL_SURFACE_FLAG_NEEDS_DRAW;
 		}
 	}
 }
 
-void wlpavuo_surface_add_subsurface(struct wlpavuo_surface *parent, struct wlpavuo_surface *surface) {
+void nwl_surface_role_subsurface(struct nwl_surface *parent, struct nwl_surface *surface) {
 	surface->wl.subsurface = wl_subcompositor_get_subsurface(surface->state->subcompositor,
 			surface->wl.surface, parent->wl.surface);
 	surface->parent = parent;
