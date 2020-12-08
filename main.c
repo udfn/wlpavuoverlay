@@ -167,10 +167,12 @@ static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_m
 
 int main (int argc, char *argv[]) {
 	struct nwl_state state = {0};
+	struct wlpavuo_state wlpstate = {0};
 	if (nwl_wayland_init(&state)) {
 		fprintf(stderr,"failed to init, bailing!\n");
 		return 1;
 	}
+	state.userdata = &wlpstate;
 	if (state.compositor) {
 		char mode = WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELL;
 		for (int i = 1; i < argc;i++) {
@@ -179,7 +181,7 @@ int main (int argc, char *argv[]) {
 			} else if (strcmp(argv[i], "xdg") == 0) {
 				mode = WLPAVUO_SURFACE_LAYER_MODE_XDGSHELL;
 			} else if (strcmp(argv[i], "pw") == 0) {
-				state.use_pipewire = true;
+				wlpstate.use_pipewire = true;
 			}
 		}
 		create_surface(&state, mode);

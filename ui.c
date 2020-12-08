@@ -415,7 +415,8 @@ char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 		set_nk_color(&ui->color_table[NK_COLOR_WINDOW], 8,8,8,231);
 		nk_style_from_table(ui->context, ui->color_table);
 #ifdef HAVE_PIPEWIRE
-		if (surface->state->use_pipewire) {
+		struct wlpavuo_state *state = surface->state->userdata;
+		if (state->use_pipewire) {
 			ui->backend = wlpavuo_audio_get_pw();
 		} else
 #endif

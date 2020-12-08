@@ -34,7 +34,7 @@ struct nwl_state {
 	uint32_t num_surfaces;
 	char destroy_surfaces;
 	struct nwl_poll *poll;
-	bool use_pipewire;
+	void *userdata;
 };
 
 struct nwl_output {
