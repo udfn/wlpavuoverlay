@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <cairo-gl.h>
 #include <cairo.h>
-#include "surface.h"
+#include <nwl/surface.h>
 #include "ui.h"
 #include "nuklear.h"
 #include "xdg-shell.h"

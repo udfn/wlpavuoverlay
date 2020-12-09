@@ -8,8 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include "nwl.h"
-#include "surface.h"
+#include "nwl/nwl.h"
+#include "nwl/surface.h"
 
 static void handle_keyboard_keymap(void *data, struct wl_keyboard *wl_keyboard, uint32_t format,
 		int32_t fd, uint32_t size) {

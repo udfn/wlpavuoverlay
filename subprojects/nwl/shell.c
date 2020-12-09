@@ -2,8 +2,8 @@
 #include "xdg-decoration-unstable-v1.h"
 #include "xdg-shell.h"
 #include "viewporter.h"
-#include "nwl.h"
-#include "surface.h"
+#include "nwl/nwl.h"
+#include "nwl/surface.h"
 
 static void handle_layer_configure(void *data, struct zwlr_layer_surface_v1 *layer, uint32_t serial, uint32_t width, uint32_t height ) {
 	struct nwl_surface *surf = (struct nwl_surface*)data;

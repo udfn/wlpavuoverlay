@@ -2,7 +2,7 @@
 #include <cairo/cairo-gl.h>
 #include <cairo.h>
 #include <stdio.h>
-#include "nwl.h"
+#include "nwl/nwl.h"
 
 static char nwl_egl_init(struct nwl_state *state) {
 	state->egl.display = eglGetPlatformDisplayEXT(EGL_PLATFORM_WAYLAND_KHR,state->display,NULL);

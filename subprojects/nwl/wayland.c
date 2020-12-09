@@ -6,8 +6,8 @@
 #include <string.h>
 #include <sys/epoll.h>
 #include <unistd.h>
-#include "nwl.h"
-#include "surface.h"
+#include "nwl/nwl.h"
+#include "nwl/surface.h"
 #include "wlr-layer-shell-unstable-v1.h"
 #include "xdg-shell.h"
 #include "xdg-decoration-unstable-v1.h"

@@ -13,8 +13,8 @@
 #include <cairo/cairo-gl.h>
 #include "wlr-layer-shell-unstable-v1.h"
 #include "xdg-shell.h"
-#include "nwl.h"
-#include "surface.h"
+#include "nwl/nwl.h"
+#include "nwl/surface.h"
 
 static void randname(char *buf) {
 	struct timespec ts;

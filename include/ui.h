@@ -1,6 +1,6 @@
 #ifndef _WLPV_UI_H
 #define _WLPV_UI_H
-#include <nwl.h>
+#include <nwl/nwl.h>
 struct wlpavuo_state {
 	bool use_pipewire;
 };

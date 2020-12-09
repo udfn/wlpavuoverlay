@@ -15,6 +15,7 @@ wlegl = dependency('wayland-egl')
 epoxy = dependency('epoxy')
 xkbc = dependency('xkbcommon')
 subdir('protocol')
+subdir('nwl')
 nwl_src = [
 	'seat.c',
 	'egl.c',
@@ -33,6 +34,9 @@ nwl_deps = [
 	epoxy,
 	xkbc
 ]
-includes = include_directories(['include'])
-nwl_lib = library('nwl',nwl_src,[proto_c,proto_h],dependencies:nwl_deps,include_directories:includes,install:true)
-nwl_dep = declare_dependency(include_directories:includes, link_with: nwl_lib, sources:[proto_h,proto_c])
+if meson.is_subproject()
+	nwl_lib = static_library('nwl',nwl_src,[proto_c,proto_h],dependencies:nwl_deps)
+	nwl_dep = declare_dependency(link_with: nwl_lib, sources:[proto_h,proto_c], include_directories:'.')
+else
+	nwl_lib = library('nwl',nwl_src,[proto_c,proto_h],dependencies:nwl_deps,install:true)
+endif
