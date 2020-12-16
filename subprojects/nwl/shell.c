@@ -35,6 +35,8 @@ static const struct zwlr_layer_surface_v1_listener layer_listener = {
 static void handle_surface_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial) {
 	struct nwl_surface *surf = data;
 	xdg_surface_ack_configure(xdg_surface, serial);
+	// Ugly hack!
+	xdg_surface_set_window_geometry(xdg_surface, 0,0, surf->width, surf->height);
 	nwl_surface_apply_size(surf);
 }
 
