@@ -89,11 +89,29 @@ static const struct wl_output_listener output_listener = {
 	handle_output_scale
 };
 
-static void nwl_output_create(struct wl_output *output, struct nwl_state *state) {
+struct nwl_removable_global {
+	struct wl_list link;
+	uint32_t name;
+	void *global;
+};
+
+static void nwl_output_create(struct wl_output *output, struct nwl_state *state, uint32_t name) {
 	struct nwl_output *wlpvoutput = calloc(1,sizeof(struct nwl_output));
 	wl_output_add_listener(output, &output_listener, wlpvoutput);
 	wl_output_set_user_data(output, wlpvoutput);
+	wlpvoutput->output = output;
 	wl_list_insert(&state->outputs, &wlpvoutput->link);
+	struct nwl_removable_global *glob = calloc(1,sizeof(struct nwl_removable_global));
+	glob->global = wlpvoutput;
+	glob->name = name;
+	wl_list_insert(&state->removable_globals, &glob->link);
+}
+
+static void nwl_output_destroy(struct nwl_output *output) {
+	wl_list_remove(&output->link);
+	wl_output_set_user_data(output->output, NULL);
+	wl_output_destroy(output->output);
+	free(output);
 }
 
 static void *nwl_registry_bind(struct wl_registry *reg, uint32_t name,
@@ -121,7 +139,7 @@ static void handle_global_add(void *data, struct wl_registry *reg,
 		state->decoration = nwl_registry_bind(reg, name, &zxdg_decoration_manager_v1_interface, version);
 	} else if (strcmp(interface,wl_output_interface.name) == 0) {
 		struct wl_output *newoutput = nwl_registry_bind(reg, name, &wl_output_interface, version);
-		nwl_output_create(newoutput, state);
+		nwl_output_create(newoutput, state, name);
 	} else if (strcmp(interface,wp_viewporter_interface.name) == 0) {
 		state->viewporter = nwl_registry_bind(reg, name, &wp_viewporter_interface, version);
 	} else if (strcmp(interface,wl_subcompositor_interface.name) == 0) {
@@ -130,10 +148,18 @@ static void handle_global_add(void *data, struct wl_registry *reg,
 }
 
 static void handle_global_remove(void *data, struct wl_registry *reg, uint32_t name) {
-	UNUSED(data);
 	UNUSED(reg);
-	UNUSED(name);
-	// don't care
+	struct nwl_state *state = data;
+	struct nwl_removable_global *glob;
+	wl_list_for_each(glob, &state->removable_globals, link) {
+		if (glob->name == name) {
+			// For now, I only bother with outputs..
+			nwl_output_destroy(glob->global);
+			wl_list_remove(&glob->link);
+			free(glob);
+			return;
+		}
+	}
 }
 
 static const struct wl_registry_listener reg_listener = {
@@ -160,7 +186,7 @@ static void nwl_wayland_poll_display(struct nwl_state *state) {
 				nwl_surface_destroy(surface);
 			}
 		}
-		state->destroy_surfaces = 0;
+		state->destroy_surfaces = false;
 	}
 }
 
@@ -194,6 +220,7 @@ char nwl_wayland_init(struct nwl_state *state) {
 	wl_list_init(&state->seats);
 	wl_list_init(&state->outputs);
 	wl_list_init(&state->surfaces);
+	wl_list_init(&state->removable_globals);
 	wl_registry_add_listener(state->registry, &reg_listener, state);
 	wl_display_roundtrip(state->display);
 	state->poll = calloc(1,sizeof(struct nwl_poll));
@@ -222,13 +249,18 @@ void nwl_wayland_uninit(struct nwl_state *state) {
 		wl_list_remove(&seat->link);
 		nwl_seat_destroy(seat);
 	}
+	// In the future, merge these two.. or perhaps make all globals be "removable"
 	struct nwl_output *output;
 	struct nwl_output *outputtmp;
 	wl_list_for_each_safe(output,outputtmp, &state->outputs, link) {
-		wl_list_remove(&output->link);
-		free(output);
+		nwl_output_destroy(output);
 	}
-
+	struct nwl_removable_global *glob;
+	struct nwl_removable_global *globtmp;
+	wl_list_for_each_safe(glob, globtmp, &state->removable_globals, link) {
+		wl_list_remove(&glob->link);
+		free(glob);
+	}
 	if (state->cursor_theme) {
 		wl_cursor_theme_destroy(state->cursor_theme);
 	}

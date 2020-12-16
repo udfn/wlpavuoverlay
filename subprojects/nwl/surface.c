@@ -175,13 +175,24 @@ static void surface_render_set_egl(struct nwl_surface *surface) {
 
 struct wl_callback_listener callback_listener;
 
+static void nwl_surface_real_apply_size(struct nwl_surface *surface) {
+	surface->flags = surface->flags & ~NWL_SURFACE_FLAG_NEEDS_APPLYSIZE;
+	wl_surface_set_buffer_scale(surface->wl.surface, surface->scale);
+	surface->render.impl.applysize(surface);
+}
+
 static void cb_done(void *data, struct wl_callback *cb, uint32_t cb_data) {
 	UNUSED(cb_data);
 	wl_callback_destroy(cb);
 	struct nwl_surface *surf = (struct nwl_surface*)data;
+	if (surf->flags & NWL_SURFACE_FLAG_NEEDS_APPLYSIZE) {
+		nwl_surface_real_apply_size(surf);
+	}
 	if (surf->flags & NWL_SURFACE_FLAG_NEEDS_DRAW) {
 		surf->flags = surf->flags & ~NWL_SURFACE_FLAG_NEEDS_DRAW;
-		surf->impl.render(surf);
+		if (surf->impl.render(surf)) {
+			nwl_surface_swapbuffers(surf);
+		}
 	}
 	surf->wl.frame_cb = NULL;
 	if (surf->flags & NWL_SURFACE_FLAG_NEEDS_DRAW) {
@@ -197,28 +208,29 @@ struct wl_callback_listener callback_listener = {
 
 struct nwl_surface_output {
 	struct wl_list link;
-	struct nwl_output *output;
+	struct wl_output *output;
 };
 
 static void surface_set_scale_from_outputs(struct nwl_surface *surf) {
 	int scale = 1;
 	struct nwl_surface_output *surfoutput;
 	wl_list_for_each(surfoutput, &surf->outputs, link) {
-		if (surfoutput->output->scale > scale) {
-			scale = surfoutput->output->scale;
+		struct nwl_output *nwoutput = wl_output_get_user_data(surfoutput->output);
+		if (nwoutput && nwoutput->scale > scale) {
+			scale = nwoutput->scale;
 		}
 	}
-	surf->scale = scale;
-	nwl_surface_apply_size(surf);
-	surf->flags |= NWL_SURFACE_FLAG_NEEDS_DRAW;
+	if (scale != surf->scale) {
+		surf->scale = scale;
+		nwl_surface_apply_size(surf);
+	}
 }
 
 static void handle_surface_enter(void *data, struct wl_surface *surface, struct wl_output *output) {
 	UNUSED(surface);
-	struct nwl_output *wlpvoutput = wl_output_get_user_data(output);
-	struct nwl_surface *surf = (struct nwl_surface*)data;
+	struct nwl_surface *surf = data;
 	struct nwl_surface_output *surfoutput = calloc(1,sizeof(struct nwl_surface_output));
-	surfoutput->output = wlpvoutput;
+	surfoutput->output = output;
 	wl_list_insert(&surf->outputs, &surfoutput->link);
 	if (!(surf->flags & NWL_SURFACE_FLAG_NO_AUTOSCALE)) {
 		surface_set_scale_from_outputs(surf);
@@ -226,12 +238,10 @@ static void handle_surface_enter(void *data, struct wl_surface *surface, struct 
 }
 static void handle_surface_leave(void *data, struct wl_surface *surface, struct wl_output *output) {
 	UNUSED(surface);
-	struct nwl_output *wlpvoutput = wl_output_get_user_data(output);
-	struct nwl_surface *surf = (struct nwl_surface*)data;
+	struct nwl_surface *surf = data;
 	struct nwl_surface_output *surfoutput;
-
 	wl_list_for_each(surfoutput, &surf->outputs, link) {
-		if (surfoutput->output == wlpvoutput) {
+		if (surfoutput->output == output) {
 			break;
 		}
 	}
@@ -304,7 +314,7 @@ void nwl_surface_destroy(struct nwl_surface *surface) {
 
 void nwl_surface_destroy_later(struct nwl_surface *surface) {
 	surface->flags = NWL_SURFACE_FLAG_DESTROY;
-	surface->state->destroy_surfaces = 1;
+	surface->state->destroy_surfaces = true;
 	if (surface->wl.frame_cb) {
 		wl_callback_destroy(surface->wl.frame_cb);
 	}
@@ -341,13 +351,18 @@ void nwl_surface_set_size(struct nwl_surface *surface, uint32_t width, uint32_t 
 }
 
 void nwl_surface_apply_size(struct nwl_surface *surface) {
-	wl_surface_set_buffer_scale(surface->wl.surface, surface->scale);
-	surface->render.impl.applysize(surface);
 	struct nwl_surface *sub;
 	wl_list_for_each(sub, &surface->subsurfaces, sublink) {
 		sub->scale = surface->scale;
 		nwl_surface_apply_size(sub);
 	}
+	surface->flags |= NWL_SURFACE_FLAG_NEEDS_APPLYSIZE;
+	// Disgusting subsurface hack
+	if (surface->parent) {
+		nwl_surface_real_apply_size(surface);
+		return;
+	}
+	nwl_surface_set_need_draw(surface, true);
 }
 
 void nwl_surface_swapbuffers(struct nwl_surface *surface) {
@@ -367,7 +382,12 @@ void nwl_surface_set_need_draw(struct nwl_surface *surface, bool render) {
 		wl_callback_add_listener(surface->wl.frame_cb, &callback_listener, surface);
 		wl_surface_commit(surface->wl.surface);
 		if (render) {
-			surface->impl.render(surface);
+			if (surface->flags & NWL_SURFACE_FLAG_NEEDS_APPLYSIZE) {
+				nwl_surface_real_apply_size(surface);
+			}
+			if (surface->impl.render(surface)) {
+				nwl_surface_swapbuffers(surface);
+			}
 		} else {
 			surface->flags |= NWL_SURFACE_FLAG_NEEDS_DRAW;
 		}

@@ -43,6 +43,7 @@ struct wlpavuo_ui {
 	} input;
 	const struct wlpavuo_audio_impl *backend;
 	int num_items;
+	int scale;
 };
 
 void cairo_set_nk_color(cairo_t *c, struct nk_color color) {
@@ -546,8 +547,9 @@ char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 	nk_end(ctx);
 	check_window_move(surface,ctx);
 	void *cmds = nk_buffer_memory(&ctx->memory);
-	if (memcmp(cmds, ui->draw_last, ctx->memory.allocated) || 
-			ui->height != surface->height || ui->width != surface->width) {
+	if (memcmp(cmds, ui->draw_last, ctx->memory.allocated) ||
+		ui->height != surface->height || ui->width != surface->width || surface->scale != ui->scale) {
+		ui->scale = surface->scale;
 		memcpy(ui->draw_last,cmds,ctx->memory.allocated);
 		ui->width = surface->width;
 		ui->height = surface->height;

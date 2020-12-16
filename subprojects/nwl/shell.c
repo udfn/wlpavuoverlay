@@ -11,7 +11,6 @@ static void handle_layer_configure(void *data, struct zwlr_layer_surface_v1 *lay
 	if (surf->impl.configure) {
 		surf->impl.configure(surf,width,height);
 		nwl_surface_apply_size(surf);
-		nwl_surface_set_need_draw(surf,true);
 		wl_surface_commit(surf->wl.surface);
 		return;
 	} else if (surf->width != width || surf->height != height) {
@@ -19,7 +18,6 @@ static void handle_layer_configure(void *data, struct zwlr_layer_surface_v1 *lay
 		surf->height = height;
 	}
 	nwl_surface_apply_size(surf);
-	nwl_surface_set_need_draw(surf,true);
 	wl_surface_commit(surf->wl.surface);
 }
 
@@ -38,7 +36,6 @@ static void handle_surface_configure(void *data, struct xdg_surface *xdg_surface
 	struct nwl_surface *surf = data;
 	xdg_surface_ack_configure(xdg_surface, serial);
 	nwl_surface_apply_size(surf);
-	nwl_surface_set_need_draw(surf,true);
 }
 
 static const struct xdg_surface_listener surface_listener = {

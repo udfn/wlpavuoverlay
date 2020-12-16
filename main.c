@@ -18,11 +18,11 @@
 #include "xdg-decoration-unstable-v1.h"
 #include "viewporter.h"
 
-static char surface_render(struct nwl_surface *surf) {
+static bool surface_render(struct nwl_surface *surf) {
 	cairo_t *cr = cairo_create(surf->cairo_surface);
 	char ret = wlpavuo_ui_run(surf, cr);
-	if (ret && !(surf->flags & NWL_SURFACE_FLAG_DESTROY)) {
-		nwl_surface_swapbuffers(surf);
+	if (surf->flags & NWL_SURFACE_FLAG_DESTROY) {
+		ret = false;
 	}
 	cairo_destroy(cr);
 	return ret;
@@ -35,8 +35,9 @@ struct bgstatus_t {
 	struct nwl_surface *main_surface;
 };
 
-static char background_surface_render(struct nwl_surface *surf) {
+static bool background_surface_render(struct nwl_surface *surf) {
 	char ret = 0;
+	bool bgdrawn = false;
 	struct bgstatus_t *bgstatus = surf->userdata;
 	if (!bgstatus->bgrendered) {
 		cairo_t *cr = cairo_create(surf->cairo_surface);
@@ -45,13 +46,13 @@ static char background_surface_render(struct nwl_surface *surf) {
 		cairo_set_source_rgba(cr, 0., 0,0, 0.45);
 		cairo_fill(cr);
 		cairo_destroy(cr);
-		nwl_surface_swapbuffers(surf);
 		bgstatus->bgrendered = 1;
-		ret = 1;
+		bgdrawn = true;
 	}
 	struct nwl_surface *subsurf;
 	wl_list_for_each(subsurf, &surf->subsurfaces, sublink) {
 		if (subsurf->impl.render(subsurf)) {
+			nwl_surface_swapbuffers(subsurf);
 			ret = 1;
 		}
 		if (bgstatus->actual_height != surf->actual_height || bgstatus->actual_width != surf->actual_width) {
@@ -64,7 +65,7 @@ static char background_surface_render(struct nwl_surface *surf) {
 	if (ret) {
 		wl_surface_commit(surf->wl.surface);
 	}
-	return ret;
+	return bgdrawn;
 }
 
 static void background_surface_input_keyboard(struct nwl_surface *surf, struct nwl_keyboard_event *event) {
@@ -153,7 +154,6 @@ static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_m
 			subsurf->states |= NWL_SURFACE_STATE_ACTIVE;
 			subsurf->flags = subsurf->flags & ~NWL_SURFACE_FLAG_CSD;
 			bgs->main_surface = subsurf;
-			nwl_surface_apply_size(subsurf);
 			setup_wlpavuo_ui_surface(subsurf);
 			wl_surface_commit(subsurf->wl.surface);
 		}

@@ -20,6 +20,7 @@ struct nwl_state {
 	struct wl_list seats; // nwl_seat
 	struct wl_list outputs; // nwl_output
 	struct wl_list surfaces; // nwl_surface
+	struct wl_list removable_globals; // nwl_removable_global
 	struct xkb_context *keyboard_context;
 	struct {
 		EGLDisplay display;
@@ -32,7 +33,7 @@ struct nwl_state {
 	struct wl_cursor_theme *cursor_theme;
 	uint32_t cursor_theme_size;
 	uint32_t num_surfaces;
-	char destroy_surfaces;
+	bool destroy_surfaces;
 	struct nwl_poll *poll;
 	void *userdata;
 };

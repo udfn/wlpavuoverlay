@@ -147,7 +147,7 @@ static const struct wl_keyboard_listener keyboard_listener = {
 };
 
 static void nwl_seat_set_pointer_cursor(struct nwl_seat *seat, struct nwl_surface *surface, const char *cursor) {
-	if (seat->state->cursor_theme_size != surface->scale*24) {
+	if ((int)seat->state->cursor_theme_size != surface->scale*24) {
 		if (seat->state->cursor_theme) {
 			wl_cursor_theme_destroy(seat->state->cursor_theme);
 		} else {

@@ -10,9 +10,10 @@ typedef void* EGLSurface;
 
 enum nwl_surface_flags {
 	NWL_SURFACE_FLAG_NEEDS_DRAW = 1 << 0,
-	NWL_SURFACE_FLAG_CSD = 1 << 1,
-	NWL_SURFACE_FLAG_DESTROY = 1 << 2,
-	NWL_SURFACE_FLAG_NO_AUTOSCALE = 1 << 3,
+	NWL_SURFACE_FLAG_NEEDS_APPLYSIZE = 1 << 1,
+	NWL_SURFACE_FLAG_CSD = 1 << 2,
+	NWL_SURFACE_FLAG_DESTROY = 1 << 3,
+	NWL_SURFACE_FLAG_NO_AUTOSCALE = 1 << 4,
 };
 
 // This is basically the xdg toplevel states..
@@ -28,7 +29,7 @@ enum nwl_surface_states {
 };
 
 struct nwl_surface;
-typedef char (*nwl_surface_render_t)(struct nwl_surface *surface);
+typedef bool (*nwl_surface_render_t)(struct nwl_surface *surface);
 typedef void (*nwl_surface_destroy_t)(struct nwl_surface *surface);
 typedef void (*nwl_surface_configure_t)(struct nwl_surface *surface, uint32_t width, uint32_t height);
 typedef void (*nwl_surface_input_pointer_t)(struct nwl_surface *surface, struct nwl_pointer_event *event);
@@ -62,13 +63,14 @@ struct nwl_surface {
 	uint32_t width, height;
 	uint32_t desired_width, desired_height;
 	uint32_t actual_width, actual_height;
-	uint32_t scale;
+	int scale;
 	struct nwl_surface *parent; // if a subsurface
 	struct wl_list outputs; // nwl_surf_outputs
 	struct wl_list subsurfaces; // nwl_surface
 	enum nwl_surface_flags flags;
 	enum nwl_surface_states states;
 	char *title;
+	uint32_t configure_serial; // This should probably be moved to a separate role thing..
 	uint32_t frame;
 	struct {
 		nwl_surface_render_t render;
