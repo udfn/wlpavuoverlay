@@ -96,30 +96,36 @@ static void nwl_output_create(struct wl_output *output, struct nwl_state *state)
 	wl_list_insert(&state->outputs, &wlpvoutput->link);
 }
 
+static void *nwl_registry_bind(struct wl_registry *reg, uint32_t name,
+		const struct wl_interface *interface, int version ) {
+	uint32_t ver = version > interface->version ? interface->version : version;
+	return wl_registry_bind(reg, name, interface, ver);
+}
+
 static void handle_global_add(void *data, struct wl_registry *reg,
 		uint32_t name, const char *interface, uint32_t version) {
 	struct nwl_state *state = data;
 	if (strcmp(interface,wl_compositor_interface.name) == 0) {
-		state->compositor = wl_registry_bind(reg, name, &wl_compositor_interface, version);
+		state->compositor = nwl_registry_bind(reg, name, &wl_compositor_interface, version);
 	} else if (strcmp(interface,zwlr_layer_shell_v1_interface.name) == 0) {
-		state->layer_shell = wl_registry_bind(reg,name,&zwlr_layer_shell_v1_interface, version);
+		state->layer_shell = nwl_registry_bind(reg, name, &zwlr_layer_shell_v1_interface, version);
 	} else if (strcmp(interface,xdg_wm_base_interface.name) == 0) {
-		state->xdg_wm_base = wl_registry_bind(reg, name, &xdg_wm_base_interface, version);
+		state->xdg_wm_base = nwl_registry_bind(reg, name, &xdg_wm_base_interface, version);
 		xdg_wm_base_add_listener(state->xdg_wm_base, &wm_base_listener, state);
 	} else if (strcmp(interface,wl_seat_interface.name) == 0) {
-		struct wl_seat *newseat = wl_registry_bind(reg, name, &wl_seat_interface, version);
+		struct wl_seat *newseat = nwl_registry_bind(reg, name, &wl_seat_interface, version);
 		nwl_seat_create(newseat, state);
 	} else if (strcmp(interface,wl_shm_interface.name) == 0) {
-		state->shm = wl_registry_bind(reg, name, &wl_shm_interface, wl_shm_interface.version);
+		state->shm = nwl_registry_bind(reg, name, &wl_shm_interface, version);
 	} else if (strcmp(interface,zxdg_decoration_manager_v1_interface.name) == 0) {
-		state->decoration = wl_registry_bind(reg,name,&zxdg_decoration_manager_v1_interface, zxdg_decoration_manager_v1_interface.version);
+		state->decoration = nwl_registry_bind(reg, name, &zxdg_decoration_manager_v1_interface, version);
 	} else if (strcmp(interface,wl_output_interface.name) == 0) {
-		struct wl_output *newoutput = wl_registry_bind(reg, name, &wl_output_interface, version);
+		struct wl_output *newoutput = nwl_registry_bind(reg, name, &wl_output_interface, version);
 		nwl_output_create(newoutput, state);
 	} else if (strcmp(interface,wp_viewporter_interface.name) == 0) {
-		state->viewporter = wl_registry_bind(reg, name, &wp_viewporter_interface, version);
+		state->viewporter = nwl_registry_bind(reg, name, &wp_viewporter_interface, version);
 	} else if (strcmp(interface,wl_subcompositor_interface.name) == 0) {
-		state->subcompositor = wl_registry_bind(reg, name, &wl_subcompositor_interface, version);
+		state->subcompositor = nwl_registry_bind(reg, name, &wl_subcompositor_interface, version);
 	}
 }
 
