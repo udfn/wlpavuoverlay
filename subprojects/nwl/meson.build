@@ -36,7 +36,7 @@ nwl_deps = [
 ]
 if meson.is_subproject()
 	nwl_lib = static_library('nwl',nwl_src,[proto_c,proto_h],dependencies:nwl_deps)
-	nwl_dep = declare_dependency(link_with: nwl_lib, sources:[proto_h,proto_c], include_directories:'.')
+	nwl_dep = declare_dependency(link_with: nwl_lib, sources:[proto_h], include_directories:'.')
 else
 	nwl_lib = library('nwl',nwl_src,[proto_c,proto_h],dependencies:nwl_deps,install:true)
 endif

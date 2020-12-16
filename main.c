@@ -80,15 +80,14 @@ static void background_surface_input_pointer(struct nwl_surface *surf, struct nw
 
 static void background_surface_configure(struct nwl_surface *surf, uint32_t width, uint32_t height) {
 	if (surf->width != width || surf->height != height) {
-		if (surf->wl.viewport) {
+		if (nwl_surface_set_vp_destination(surf,width,height)) {
 			surf->width = 1;
 			surf->height = 1;
-			wp_viewport_set_destination(surf->wl.viewport, width, height);
-		} else {
-			// No viewport? Oh well..
-			surf->width = width;
-			surf->height = height;
+			return;
 		}
+		// No viewport? Oh well..
+		surf->width = width;
+		surf->height = height;
 		surf->actual_height = height;
 		surf->actual_width = width;
 	}

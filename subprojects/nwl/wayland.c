@@ -166,7 +166,6 @@ void nwl_wayland_run(struct nwl_state *state) {
 		int nfds = epoll_wait(state->poll->efd, state->poll->ev, state->poll->numfds, -1);
 		if (nfds == -1) {
 			perror("error while polling");
-			wl_display_cancel_read(state->display);
 			return;
 		}
 		for (int i = 0; i < nfds;i++) {

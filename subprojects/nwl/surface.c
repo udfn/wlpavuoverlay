@@ -13,6 +13,7 @@
 #include <cairo/cairo-gl.h>
 #include "wlr-layer-shell-unstable-v1.h"
 #include "xdg-shell.h"
+#include "viewporter.h"
 #include "nwl/nwl.h"
 #include "nwl/surface.h"
 
@@ -307,6 +308,24 @@ void nwl_surface_destroy_later(struct nwl_surface *surface) {
 	if (surface->wl.frame_cb) {
 		wl_callback_destroy(surface->wl.frame_cb);
 	}
+}
+
+bool nwl_surface_set_vp_destination(struct nwl_surface *surface, int32_t width, int32_t height) {
+	if (!surface->state->viewporter) {
+		return false;
+	}
+	if (!surface->wl.viewport) {
+		surface->wl.viewport = wp_viewporter_get_viewport(surface->state->viewporter, surface->wl.surface);
+	}
+	wp_viewport_set_destination(surface->wl.viewport, width, height);
+	if (width == -1 && height == -1) {
+		surface->actual_height = surface->height;
+		surface->actual_width = surface->width;
+	} else {
+		surface->actual_height = height;
+		surface->actual_width = width;
+	}
+	return true;
 }
 
 void nwl_surface_set_size(struct nwl_surface *surface, uint32_t width, uint32_t height) {
