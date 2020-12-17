@@ -6,6 +6,7 @@
 #include <cairo.h>
 #include <wayland-client.h>
 #include "seat.h"
+
 typedef void* EGLSurface;
 
 enum nwl_surface_flags {

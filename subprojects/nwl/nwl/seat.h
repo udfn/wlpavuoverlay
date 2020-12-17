@@ -3,6 +3,7 @@
 #include <xkbcommon/xkbcommon.h>
 #include <stdint.h>
 #include <wayland-util.h>
+
 struct nwl_seat {
 	struct nwl_state *state;
 	struct wl_list link;
@@ -89,9 +90,8 @@ struct nwl_keyboard_event {
 	uint32_t serial;
 };
 
-void nwl_seat_create(struct wl_seat *wlseat, struct nwl_state *state);
+void nwl_seat_create(struct wl_seat *wlseat, struct nwl_state *state, uint32_t name);
 void nwl_seat_send_key_repeat(struct nwl_seat *seat);
-void nwl_seat_destroy(struct nwl_seat *seat);
 void nwl_seat_clear_focus(struct nwl_surface *surface);
 
 #endif

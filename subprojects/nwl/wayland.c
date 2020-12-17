@@ -78,7 +78,7 @@ static void handle_output_scale(
 		struct wl_output *wl_output,
 		int32_t factor) {
 	UNUSED(wl_output);
-	struct nwl_output *output = (struct nwl_output*)data;
+	struct nwl_output *output = data;
 	output->scale = factor;
 }
 
@@ -89,11 +89,13 @@ static const struct wl_output_listener output_listener = {
 	handle_output_scale
 };
 
-struct nwl_removable_global {
-	struct wl_list link;
-	uint32_t name;
-	void *global;
-};
+static void nwl_output_destroy(void *glob) {
+	struct nwl_output *output = glob;
+	wl_list_remove(&output->link);
+	wl_output_set_user_data(output->output, NULL);
+	wl_output_destroy(output->output);
+	free(output);
+}
 
 static void nwl_output_create(struct wl_output *output, struct nwl_state *state, uint32_t name) {
 	struct nwl_output *wlpvoutput = calloc(1,sizeof(struct nwl_output));
@@ -101,17 +103,11 @@ static void nwl_output_create(struct wl_output *output, struct nwl_state *state,
 	wl_output_set_user_data(output, wlpvoutput);
 	wlpvoutput->output = output;
 	wl_list_insert(&state->outputs, &wlpvoutput->link);
-	struct nwl_removable_global *glob = calloc(1,sizeof(struct nwl_removable_global));
+	struct nwl_global *glob = calloc(1,sizeof(struct nwl_global));
 	glob->global = wlpvoutput;
 	glob->name = name;
-	wl_list_insert(&state->removable_globals, &glob->link);
-}
-
-static void nwl_output_destroy(struct nwl_output *output) {
-	wl_list_remove(&output->link);
-	wl_output_set_user_data(output->output, NULL);
-	wl_output_destroy(output->output);
-	free(output);
+	glob->impl.destroy = nwl_output_destroy;
+	wl_list_insert(&state->globals, &glob->link);
 }
 
 static void *nwl_registry_bind(struct wl_registry *reg, uint32_t name,
@@ -132,7 +128,7 @@ static void handle_global_add(void *data, struct wl_registry *reg,
 		xdg_wm_base_add_listener(state->xdg_wm_base, &wm_base_listener, state);
 	} else if (strcmp(interface,wl_seat_interface.name) == 0) {
 		struct wl_seat *newseat = nwl_registry_bind(reg, name, &wl_seat_interface, version);
-		nwl_seat_create(newseat, state);
+		nwl_seat_create(newseat, state, name);
 	} else if (strcmp(interface,wl_shm_interface.name) == 0) {
 		state->shm = nwl_registry_bind(reg, name, &wl_shm_interface, version);
 	} else if (strcmp(interface,zxdg_decoration_manager_v1_interface.name) == 0) {
@@ -150,11 +146,10 @@ static void handle_global_add(void *data, struct wl_registry *reg,
 static void handle_global_remove(void *data, struct wl_registry *reg, uint32_t name) {
 	UNUSED(reg);
 	struct nwl_state *state = data;
-	struct nwl_removable_global *glob;
-	wl_list_for_each(glob, &state->removable_globals, link) {
+	struct nwl_global *glob;
+	wl_list_for_each(glob, &state->globals, link) {
 		if (glob->name == name) {
-			// For now, I only bother with outputs..
-			nwl_output_destroy(glob->global);
+			glob->impl.destroy(glob->global);
 			wl_list_remove(&glob->link);
 			free(glob);
 			return;
@@ -167,13 +162,19 @@ static const struct wl_registry_listener reg_listener = {
 	handle_global_remove
 };
 
-void nwl_add_seat_fd(struct nwl_seat *seat) {
+void nwl_poll_add_seat(struct nwl_seat *seat) {
 	struct nwl_state *state = seat->state;
 	state->poll->ev = realloc(state->poll->ev, sizeof(struct epoll_event)* ++state->poll->numfds);
 	struct epoll_event ep;
 	ep.data.ptr = seat;
 	ep.events = EPOLLIN;
 	epoll_ctl(state->poll->efd, EPOLL_CTL_ADD, seat->keyboard_repeat_fd, &ep);
+}
+
+void nwl_poll_remove_seat(struct nwl_seat *seat) {
+	struct nwl_state *state = seat->state;
+	state->poll->ev = realloc(state->poll->ev, sizeof(struct epoll_event)* --state->poll->numfds);
+	epoll_ctl(state->poll->efd, EPOLL_CTL_DEL, seat->keyboard_repeat_fd, NULL);
 }
 
 static void nwl_wayland_poll_display(struct nwl_state *state) {
@@ -220,7 +221,7 @@ char nwl_wayland_init(struct nwl_state *state) {
 	wl_list_init(&state->seats);
 	wl_list_init(&state->outputs);
 	wl_list_init(&state->surfaces);
-	wl_list_init(&state->removable_globals);
+	wl_list_init(&state->globals);
 	wl_registry_add_listener(state->registry, &reg_listener, state);
 	wl_display_roundtrip(state->display);
 	state->poll = calloc(1,sizeof(struct nwl_poll));
@@ -242,22 +243,11 @@ void nwl_wayland_uninit(struct nwl_state *state) {
 		nwl_surface_destroy(surface);
 	}
 	nwl_egl_uninit(state);
-	struct nwl_seat *seat;
-	struct nwl_seat *seattmp;
 	xkb_context_unref(state->keyboard_context);
-	wl_list_for_each_safe(seat,seattmp, &state->seats, link) {
-		wl_list_remove(&seat->link);
-		nwl_seat_destroy(seat);
-	}
-	// In the future, merge these two.. or perhaps make all globals be "removable"
-	struct nwl_output *output;
-	struct nwl_output *outputtmp;
-	wl_list_for_each_safe(output,outputtmp, &state->outputs, link) {
-		nwl_output_destroy(output);
-	}
-	struct nwl_removable_global *glob;
-	struct nwl_removable_global *globtmp;
-	wl_list_for_each_safe(glob, globtmp, &state->removable_globals, link) {
+	struct nwl_global *glob;
+	struct nwl_global *globtmp;
+	wl_list_for_each_safe(glob, globtmp, &state->globals, link) {
+		glob->impl.destroy(glob->global);
 		wl_list_remove(&glob->link);
 		free(glob);
 	}

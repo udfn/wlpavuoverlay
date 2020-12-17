@@ -405,7 +405,7 @@ static void handle_seat_capabilities(void *data, struct wl_seat *seat, uint32_t 
 		}
 		nwseat->keyboard_event = calloc(1,sizeof(struct nwl_keyboard_event));
 		nwseat->keyboard_repeat_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
-		nwl_add_seat_fd(nwseat);
+		nwl_poll_add_seat(nwseat);
 		wl_keyboard_add_listener(nwseat->keyboard, &keyboard_listener, data);
 	}
 	if (capabilities & WL_SEAT_CAPABILITY_POINTER) {
@@ -446,15 +446,9 @@ void nwl_seat_clear_focus(struct nwl_surface *surface) {
 	}
 }
 
-void nwl_seat_create(struct wl_seat *wlseat,struct nwl_state *state) {
-	struct nwl_seat *newwlpseat = calloc(1,sizeof(struct nwl_seat));
-	newwlpseat->state = state;
-	newwlpseat->wl_seat = wlseat;
-	wl_list_insert(&state->seats, &newwlpseat->link);
-	wl_seat_add_listener(wlseat, &seat_listener, newwlpseat);
-}
-
-void nwl_seat_destroy(struct nwl_seat *seat) {
+void nwl_seat_destroy(void *data) {
+	struct nwl_seat *seat = data;
+	wl_list_remove(&seat->link);
 	free(seat->name);
 	if (seat->keyboard_keymap) {
 		xkb_keymap_unref(seat->keyboard_keymap);
@@ -466,10 +460,23 @@ void nwl_seat_destroy(struct nwl_seat *seat) {
 		free(seat->pointer_event);
 	}
 	if (seat->keyboard_event) {
+		nwl_poll_remove_seat(seat);
 		free(seat->keyboard_event);
 		close(seat->keyboard_repeat_fd);
-		// Should also stop polling the fd here..
 	}
 	wl_seat_destroy(seat->wl_seat);
 	free(seat);
+}
+
+void nwl_seat_create(struct wl_seat *wlseat, struct nwl_state *state, uint32_t name) {
+	struct nwl_seat *nwlseat = calloc(1,sizeof(struct nwl_seat));
+	nwlseat->state = state;
+	nwlseat->wl_seat = wlseat;
+	wl_list_insert(&state->seats, &nwlseat->link);
+	wl_seat_add_listener(wlseat, &seat_listener, nwlseat);
+	struct nwl_global *glob = calloc(1,sizeof(struct nwl_global));
+	glob->global = nwlseat;
+	glob->name = name;
+	glob->impl.destroy = nwl_seat_destroy;
+	wl_list_insert(&state->globals, &glob->link);
 }
