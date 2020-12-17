@@ -98,13 +98,13 @@ static void nwl_output_destroy(void *glob) {
 }
 
 static void nwl_output_create(struct wl_output *output, struct nwl_state *state, uint32_t name) {
-	struct nwl_output *wlpvoutput = calloc(1,sizeof(struct nwl_output));
-	wl_output_add_listener(output, &output_listener, wlpvoutput);
-	wl_output_set_user_data(output, wlpvoutput);
-	wlpvoutput->output = output;
-	wl_list_insert(&state->outputs, &wlpvoutput->link);
+	struct nwl_output *nwloutput = calloc(1,sizeof(struct nwl_output));
+	wl_output_add_listener(output, &output_listener, nwloutput);
+	wl_output_set_user_data(output, nwloutput);
+	nwloutput->output = output;
+	wl_list_insert(&state->outputs, &nwloutput->link);
 	struct nwl_global *glob = calloc(1,sizeof(struct nwl_global));
-	glob->global = wlpvoutput;
+	glob->global = nwloutput;
 	glob->name = name;
 	glob->impl.destroy = nwl_output_destroy;
 	wl_list_insert(&state->globals, &glob->link);

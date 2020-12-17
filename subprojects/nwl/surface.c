@@ -30,7 +30,7 @@ static void randname(char *buf) {
 static int create_shm_file(void) {
 	int retries = 100;
 	do {
-		char name[] = "/wlpao_shm-XXXXXX";
+		char name[] = "/nwl_shm-XXXXXX";
 		randname(name + sizeof(name) - 7);
 		--retries;
 		int fd = shm_open(name, O_RDWR | O_CREAT | O_EXCL, 0600);

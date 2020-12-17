@@ -168,14 +168,14 @@ static void nwl_seat_set_pointer_cursor(struct nwl_seat *seat, struct nwl_surfac
 static void handle_pointer_enter(void *data, struct wl_pointer *pointer, uint32_t serial, struct wl_surface *surface, wl_fixed_t surface_x, wl_fixed_t surface_y) {
 	UNUSED(pointer);
 	struct nwl_seat *seat = (struct nwl_seat*)data;
-	struct nwl_surface *wlpvsurf = wl_surface_get_user_data(surface);
+	struct nwl_surface *nwlsurf = wl_surface_get_user_data(surface);
 	seat->pointer_event->surface_x = surface_x;
 	seat->pointer_event->surface_y = surface_y;
 	seat->pointer_event->focus = 1;
-	seat->pointer_focus = wlpvsurf;
+	seat->pointer_focus = nwlsurf;
 	seat->pointer_event->serial = serial;
 	seat->pointer_event->changed |= NWL_POINTER_EVENT_MOTION | NWL_POINTER_EVENT_FOCUS;
-	nwl_seat_set_pointer_cursor(seat, wlpvsurf, "left_ptr");
+	nwl_seat_set_pointer_cursor(seat, nwlsurf, "left_ptr");
 }
 
 static void handle_pointer_leave(void *data, struct wl_pointer *pointer, uint32_t serial, struct wl_surface *surface) {
@@ -416,16 +416,16 @@ static void handle_seat_capabilities(void *data, struct wl_seat *seat, uint32_t 
 	}
 	/*
 	if (capabilities & WL_SEAT_CAPABILITY_TOUCH) {
-		wlpseat->touch = wl_seat_get_touch(seat);
-		wl_touch_add_listener(wlpseat->touch, &touch_listener, data);
+		nwseat->touch = wl_seat_get_touch(seat);
+		wl_touch_add_listener(nwseat->touch, &touch_listener, data);
 	}
 	*/
 }
 
 static void handle_seat_name(void *data, struct wl_seat *seat, const char *name) {
 	UNUSED(seat);
-	struct nwl_seat *wlpseat = (struct nwl_seat*)data;
-	wlpseat->name = strdup(name);
+	struct nwl_seat *nwseat = (struct nwl_seat*)data;
+	nwseat->name = strdup(name);
 }
 
 static const struct wl_seat_listener seat_listener = {
