@@ -16,6 +16,13 @@ struct nwl_global {
 	} impl;
 };
 
+struct nwl_output {
+	struct nwl_state *state;
+	struct wl_output *output;
+	struct wl_list link;
+	int scale;
+};
+
 struct nwl_state {
 	struct wl_display *display;
 	struct wl_registry *registry;
@@ -44,13 +51,13 @@ struct nwl_state {
 	uint32_t num_surfaces;
 	bool destroy_surfaces;
 	struct nwl_poll *poll;
+	struct {
+		// A wild output appears!
+		void (*output_new)(struct nwl_output *output);
+		// The output is about to go away!
+		void (*output_destroy)(struct nwl_output *output);
+	} events;
 	void *userdata;
-};
-
-struct nwl_output {
-	struct wl_output *output;
-	struct wl_list link;
-	int scale;
 };
 
 char nwl_wayland_init(struct nwl_state *state);

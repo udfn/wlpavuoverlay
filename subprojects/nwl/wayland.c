@@ -91,6 +91,9 @@ static const struct wl_output_listener output_listener = {
 
 static void nwl_output_destroy(void *glob) {
 	struct nwl_output *output = glob;
+	if (output->state->events.output_destroy) {
+		output->state->events.output_destroy(output);
+	}
 	wl_list_remove(&output->link);
 	wl_output_set_user_data(output->output, NULL);
 	wl_output_destroy(output->output);
@@ -102,12 +105,16 @@ static void nwl_output_create(struct wl_output *output, struct nwl_state *state,
 	wl_output_add_listener(output, &output_listener, nwloutput);
 	wl_output_set_user_data(output, nwloutput);
 	nwloutput->output = output;
+	nwloutput->state = state;
 	wl_list_insert(&state->outputs, &nwloutput->link);
 	struct nwl_global *glob = calloc(1,sizeof(struct nwl_global));
 	glob->global = nwloutput;
 	glob->name = name;
 	glob->impl.destroy = nwl_output_destroy;
 	wl_list_insert(&state->globals, &glob->link);
+	if (state->events.output_new) {
+		state->events.output_new(nwloutput);
+	}
 }
 
 static void *nwl_registry_bind(struct wl_registry *reg, uint32_t name,
@@ -217,13 +224,6 @@ char nwl_wayland_init(struct nwl_state *state) {
 		fprintf(stderr,"couldn't connect to Wayland display.\n");
 		return 1;
 	}
-	state->registry = wl_display_get_registry(state->display);
-	wl_list_init(&state->seats);
-	wl_list_init(&state->outputs);
-	wl_list_init(&state->surfaces);
-	wl_list_init(&state->globals);
-	wl_registry_add_listener(state->registry, &reg_listener, state);
-	wl_display_roundtrip(state->display);
 	state->poll = calloc(1,sizeof(struct nwl_poll));
 	state->poll->efd = epoll_create1(0);
 	state->poll->ev = calloc(1,sizeof(struct epoll_event));
@@ -233,6 +233,13 @@ char nwl_wayland_init(struct nwl_state *state) {
 	ep.events = EPOLLIN;
 	state->poll->numfds = 1;
 	epoll_ctl(state->poll->efd, EPOLL_CTL_ADD, state->poll->dfd, &ep);
+	state->registry = wl_display_get_registry(state->display);
+	wl_list_init(&state->seats);
+	wl_list_init(&state->outputs);
+	wl_list_init(&state->surfaces);
+	wl_list_init(&state->globals);
+	wl_registry_add_listener(state->registry, &reg_listener, state);
+	wl_display_roundtrip(state->display);
 	return 0;
 }
 
