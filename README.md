@@ -11,6 +11,7 @@ You can add arguments to change the behaviour.
 * `xdg` - Use xdg-shell even if layer-shell is available.
 * `dim` - "Fullscreen" mode. This makes mouse usage easier if another surface has locked or hidden the pointer. Only with layer-shell.
 * `pw` - Use PipeWire instead of PulseAudio. Very unfinished, do not use.
+* `shm` - Use software rendering instead of GL. Not sure why you'd want this...
 
 There are currently hardcoded keyboard commands..
 * **j k** - move down / up

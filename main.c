@@ -124,7 +124,9 @@ static void setup_wlpavuo_ui_surface(struct nwl_surface *surf) {
 }
 
 static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_mode layer) {
-	struct nwl_surface *surf = nwl_surface_create(state,"WlPaVUOverlay", NWL_SURFACE_RENDER_EGL);
+	struct wlpavuo_state *wlpstate = state->userdata;
+	enum nwl_surface_renderer renderer = wlpstate->use_shm ? NWL_SURFACE_RENDER_SHM : NWL_SURFACE_RENDER_EGL;
+	struct nwl_surface *surf = nwl_surface_create(state,"WlPaVUOverlay", renderer);
 	set_surface_role(surf, layer != WLPAVUO_SURFACE_LAYER_MODE_XDGSHELL);
 	if (surf->wl.layer_surface) {
 		if (layer == WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELL) {
@@ -147,7 +149,7 @@ static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_m
 			if (state->viewporter) {
 				surf->wl.viewport = wp_viewporter_get_viewport(state->viewporter, surf->wl.surface);
 			}
-			struct nwl_surface *subsurf = nwl_surface_create(state, "WlPaVUOverlay sub", NWL_SURFACE_RENDER_EGL);
+			struct nwl_surface *subsurf = nwl_surface_create(state, "WlPaVUOverlay sub", renderer);
 			nwl_surface_role_subsurface(surf, subsurf);
 			wl_subsurface_set_position(subsurf->wl.subsurface, 0,0);
 			nwl_surface_set_size(subsurf, 540, 540);
@@ -181,6 +183,8 @@ int main (int argc, char *argv[]) {
 				mode = WLPAVUO_SURFACE_LAYER_MODE_XDGSHELL;
 			} else if (strcmp(argv[i], "pw") == 0) {
 				wlpstate.use_pipewire = true;
+			} else if (strcmp(argv[i], "shm") == 0) {
+				wlpstate.use_shm = true;
 			}
 		}
 		create_surface(&state, mode);

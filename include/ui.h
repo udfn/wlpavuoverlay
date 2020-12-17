@@ -3,6 +3,7 @@
 #include <nwl/nwl.h>
 struct wlpavuo_state {
 	bool use_pipewire;
+	bool use_shm;
 };
 void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_pointer_event *event);
 void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_keyboard_event *event);
