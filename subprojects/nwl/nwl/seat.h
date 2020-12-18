@@ -91,7 +91,6 @@ struct nwl_keyboard_event {
 };
 
 void nwl_seat_create(struct wl_seat *wlseat, struct nwl_state *state, uint32_t name);
-void nwl_seat_send_key_repeat(struct nwl_seat *seat);
 void nwl_seat_clear_focus(struct nwl_surface *surface);
 
 #endif

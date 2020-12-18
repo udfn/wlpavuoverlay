@@ -60,11 +60,14 @@ struct nwl_state {
 	void *userdata;
 };
 
+typedef void (*nwl_poll_callback_t)(struct nwl_state *state, void* data);
+
 char nwl_wayland_init(struct nwl_state *state);
 void nwl_wayland_uninit(struct nwl_state *state);
 void nwl_wayland_run(struct nwl_state *state);
-void nwl_poll_add_seat(struct nwl_seat *seat);
-void nwl_poll_remove_seat(struct nwl_seat *seat);
+void nwl_poll_add_fd(struct nwl_state *state, int fd, // pollin, pollout, edge trigger, etc?
+	nwl_poll_callback_t callback, void *data);
+void nwl_poll_del_fd(struct nwl_state *state, int fd);
 // To be very inconsistent, this returns true on success..
 bool nwl_egl_try_init(struct nwl_state *state);
 void nwl_egl_uninit(struct nwl_state *state);

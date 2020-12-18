@@ -18,6 +18,7 @@ struct nwl_poll {
 	int dfd;
 	int numfds;
 	struct epoll_event *ev;
+	struct wl_list data; // nwl_poll_data
 };
 
 static void handle_wm_ping(void *data, struct xdg_wm_base *xdg_wm_base, uint32_t serial) {
@@ -169,19 +170,38 @@ static const struct wl_registry_listener reg_listener = {
 	handle_global_remove
 };
 
-void nwl_poll_add_seat(struct nwl_seat *seat) {
-	struct nwl_state *state = seat->state;
+struct nwl_poll_data {
+	struct wl_list link;
+	int fd;
+	void *userdata;
+	nwl_poll_callback_t callback;
+};
+
+void nwl_poll_add_fd(struct nwl_state *state, int fd,
+		nwl_poll_callback_t callback, void *data) {
 	state->poll->ev = realloc(state->poll->ev, sizeof(struct epoll_event)* ++state->poll->numfds);
 	struct epoll_event ep;
-	ep.data.ptr = seat;
+	struct nwl_poll_data *polldata = calloc(1,sizeof(struct nwl_poll_data));
+	wl_list_insert(&state->poll->data, &polldata->link);
+	polldata->userdata = data;
+	polldata->fd = fd;
+	polldata->callback = callback;
+	ep.data.ptr = polldata;
 	ep.events = EPOLLIN;
-	epoll_ctl(state->poll->efd, EPOLL_CTL_ADD, seat->keyboard_repeat_fd, &ep);
+	epoll_ctl(state->poll->efd, EPOLL_CTL_ADD, fd, &ep);
 }
 
-void nwl_poll_remove_seat(struct nwl_seat *seat) {
-	struct nwl_state *state = seat->state;
+void nwl_poll_del_fd(struct nwl_state *state, int fd) {
 	state->poll->ev = realloc(state->poll->ev, sizeof(struct epoll_event)* --state->poll->numfds);
-	epoll_ctl(state->poll->efd, EPOLL_CTL_DEL, seat->keyboard_repeat_fd, NULL);
+	epoll_ctl(state->poll->efd, EPOLL_CTL_DEL, fd, NULL);
+	struct nwl_poll_data *data;
+	wl_list_for_each(data, &state->poll->data, link) {
+		if (data->fd == fd) {
+			wl_list_remove(&data->link);
+			free(data);
+			return;
+		}
+	}
 }
 
 static void nwl_wayland_poll_display(struct nwl_state *state) {
@@ -212,7 +232,8 @@ void nwl_wayland_run(struct nwl_state *state) {
 			if (state->poll->ev[i].data.fd == state->poll->dfd) {
 				nwl_wayland_poll_display(state);
 			} else {
-				nwl_seat_send_key_repeat(state->poll->ev[i].data.ptr);
+				struct nwl_poll_data *data = state->poll->ev[i].data.ptr;
+				data->callback(state, data->userdata);
 			}
 		}
 	}
@@ -238,6 +259,7 @@ char nwl_wayland_init(struct nwl_state *state) {
 	wl_list_init(&state->outputs);
 	wl_list_init(&state->surfaces);
 	wl_list_init(&state->globals);
+	wl_list_init(&state->poll->data);
 	wl_registry_add_listener(state->registry, &reg_listener, state);
 	wl_display_roundtrip(state->display);
 	return 0;

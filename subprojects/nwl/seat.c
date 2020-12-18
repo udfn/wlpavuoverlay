@@ -39,7 +39,9 @@ static void dispatch_keyboard_event(struct nwl_keyboard_event *event, struct nwl
 	event->type = 0;
 }
 
-void nwl_seat_send_key_repeat(struct nwl_seat *seat) {
+void nwl_seat_send_key_repeat(struct nwl_state *state, void *data) {
+	UNUSED(state);
+	struct nwl_seat *seat = data;
 	uint64_t expirations;
 	read(seat->keyboard_repeat_fd,&expirations,sizeof(uint64_t));
 	if (seat->keyboard_focus) {
@@ -397,7 +399,7 @@ static const struct wl_touch_listener touch_listener = {
 };
 */
 static void handle_seat_capabilities(void *data, struct wl_seat *seat, uint32_t capabilities) {
-	struct nwl_seat *nwseat = (struct nwl_seat*)data;
+	struct nwl_seat *nwseat = data;
 	if (capabilities & WL_SEAT_CAPABILITY_KEYBOARD) {
 		nwseat->keyboard = wl_seat_get_keyboard(seat);
 		if (!nwseat->state->keyboard_context) {
@@ -405,7 +407,7 @@ static void handle_seat_capabilities(void *data, struct wl_seat *seat, uint32_t 
 		}
 		nwseat->keyboard_event = calloc(1,sizeof(struct nwl_keyboard_event));
 		nwseat->keyboard_repeat_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
-		nwl_poll_add_seat(nwseat);
+		nwl_poll_add_fd(nwseat->state, nwseat->keyboard_repeat_fd, nwl_seat_send_key_repeat, nwseat);
 		wl_keyboard_add_listener(nwseat->keyboard, &keyboard_listener, data);
 	}
 	if (capabilities & WL_SEAT_CAPABILITY_POINTER) {
@@ -460,7 +462,7 @@ void nwl_seat_destroy(void *data) {
 		free(seat->pointer_event);
 	}
 	if (seat->keyboard_event) {
-		nwl_poll_remove_seat(seat);
+		nwl_poll_del_fd(seat->state, seat->keyboard_repeat_fd);
 		free(seat->keyboard_event);
 		close(seat->keyboard_repeat_fd);
 	}
