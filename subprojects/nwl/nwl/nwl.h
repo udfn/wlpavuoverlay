@@ -19,8 +19,10 @@ struct nwl_global {
 struct nwl_output {
 	struct nwl_state *state;
 	struct wl_output *output;
+	struct zxdg_output_v1 *xdg_output;
 	struct wl_list link;
 	int scale;
+	char *name;
 };
 
 struct nwl_state {
@@ -29,6 +31,7 @@ struct nwl_state {
 	struct wl_compositor *compositor;
 	struct wl_shm *shm;
 	struct xdg_wm_base *xdg_wm_base;
+	struct zxdg_output_manager_v1 *xdg_output_manager;
 	struct zwlr_layer_shell_v1 *layer_shell;
 	struct zxdg_decoration_manager_v1 *decoration;
 	struct wp_viewporter *viewporter;
@@ -49,6 +52,7 @@ struct nwl_state {
 	struct wl_cursor_theme *cursor_theme;
 	uint32_t cursor_theme_size;
 	uint32_t num_surfaces;
+	bool run_with_zero_surfaces;
 	bool destroy_surfaces;
 	struct nwl_poll *poll;
 	struct {

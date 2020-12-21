@@ -48,7 +48,7 @@ static void handle_toplevel_configure(void *data, struct xdg_toplevel *xdg_tople
 		int32_t width, int32_t height, struct wl_array *states) {
 	UNUSED(xdg_toplevel);
 	struct nwl_surface *surf = data;
-		uint32_t *state = 0;
+	uint32_t *state = 0;
 	enum nwl_surface_states newstates = 0;
 	wl_array_for_each(state, states) {
 		switch (*state) {

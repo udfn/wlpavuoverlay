@@ -3,7 +3,8 @@ protos = [
 	'viewporter.xml',
 	'wlr-layer-shell-unstable-v1.xml',
 	'xdg-decoration-unstable-v1.xml',
-	'xdg-shell.xml'
+	'xdg-shell.xml',
+	'xdg-output-unstable-v1.xml'
 ]
 wl_gen_c = generator(wlscanner,
 	output: '@BASENAME@.c',

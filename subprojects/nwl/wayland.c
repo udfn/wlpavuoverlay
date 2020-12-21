@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include <wayland-client.h>
 #include <wayland-cursor.h>
 #include <xkbcommon/xkbcommon.h>
@@ -11,6 +12,7 @@
 #include "wlr-layer-shell-unstable-v1.h"
 #include "xdg-shell.h"
 #include "xdg-decoration-unstable-v1.h"
+#include "xdg-output-unstable-v1.h"
 #include "viewporter.h"
 
 struct nwl_poll {
@@ -90,10 +92,61 @@ static const struct wl_output_listener output_listener = {
 	handle_output_scale
 };
 
+static void handle_xdg_output_logical_position(void *data, struct zxdg_output_v1 *output,
+		int32_t x, int32_t y) {
+	// don't care
+	UNUSED(data);
+	UNUSED(output);
+	UNUSED(x);
+	UNUSED(y);
+}
+
+static void handle_xdg_output_logical_size(void *data, struct zxdg_output_v1 *output,
+		int32_t width, int32_t height) {
+	// don't care
+	UNUSED(data);
+	UNUSED(output);
+	UNUSED(width);
+	UNUSED(height);
+}
+
+static void handle_xdg_output_done(void *data, struct zxdg_output_v1 *output) {
+	// shouldn't be used
+	UNUSED(data);
+	UNUSED(output);
+}
+
+static void handle_xdg_output_name(void *data, struct zxdg_output_v1 *output, const char *name) {
+	UNUSED(output);
+	struct nwl_output *nwloutput = data;
+	if (nwloutput->name) {
+		free(nwloutput->name);
+	}
+	nwloutput->name = strdup(name);
+}
+
+static void handle_xdg_output_description(void *data, struct zxdg_output_v1 *output, const char *description) {
+	// don't care
+	UNUSED(data);
+	UNUSED(output);
+	UNUSED(description);
+}
+
+static const struct zxdg_output_v1_listener xdg_output_listener = {
+	handle_xdg_output_logical_position,
+	handle_xdg_output_logical_size,
+	handle_xdg_output_done,
+	handle_xdg_output_name,
+	handle_xdg_output_description
+};
+
 static void nwl_output_destroy(void *glob) {
 	struct nwl_output *output = glob;
 	if (output->state->events.output_destroy) {
 		output->state->events.output_destroy(output);
+	}
+	if (output->name) {
+		free(output->name);
 	}
 	wl_list_remove(&output->link);
 	wl_output_set_user_data(output->output, NULL);
@@ -112,7 +165,12 @@ static void nwl_output_create(struct wl_output *output, struct nwl_state *state,
 	glob->global = nwloutput;
 	glob->name = name;
 	glob->impl.destroy = nwl_output_destroy;
+	if (state->xdg_output_manager) {
+		nwloutput->xdg_output = zxdg_output_manager_v1_get_xdg_output(state->xdg_output_manager, output);
+		zxdg_output_v1_add_listener(nwloutput->xdg_output, &xdg_output_listener, nwloutput);
+	}
 	wl_list_insert(&state->globals, &glob->link);
+	// Maybe move this to handle_output_done?
 	if (state->events.output_new) {
 		state->events.output_new(nwloutput);
 	}
@@ -152,6 +210,8 @@ static void handle_global_add(void *data, struct wl_registry *reg,
 		state->viewporter = nwl_registry_bind(reg, name, &wp_viewporter_interface, version);
 	} else if (strcmp(interface,wl_subcompositor_interface.name) == 0) {
 		state->subcompositor = nwl_registry_bind(reg, name, &wl_subcompositor_interface, version);
+	} else if (strcmp(interface,zxdg_output_manager_v1_interface.name) == 0) {
+		state->xdg_output_manager = nwl_registry_bind(reg, name, &zxdg_output_manager_v1_interface, version);
 	}
 }
 
@@ -228,7 +288,7 @@ static void nwl_wayland_poll_display(struct nwl_state *state) {
 void nwl_wayland_run(struct nwl_state *state) {
 	wl_display_flush(state->display);
 	// Everything about this seems very flaky.. but it works!
-	while (state->num_surfaces) {
+	while (state->run_with_zero_surfaces || state->num_surfaces) {
 		wl_display_flush(state->display);
 		int nfds = epoll_wait(state->poll->efd, state->poll->ev, state->poll->numfds, -1);
 		if (nfds == -1) {
