@@ -56,6 +56,11 @@ struct nwl_state {
 		void (*output_new)(struct nwl_output *output);
 		// The output is about to go away!
 		void (*output_destroy)(struct nwl_output *output);
+		// A wild global appears! Return true to not have nwl take care of it!
+		bool (*global_add)(struct nwl_state *state, struct wl_registry *registry, uint32_t name,
+			const char *interface, uint32_t version);
+		// The global disappears!
+		void (*global_remove)(struct nwl_state *statem, struct wl_registry *registry, uint32_t name);
 	} events;
 	void *userdata;
 };

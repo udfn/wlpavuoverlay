@@ -127,6 +127,10 @@ static void *nwl_registry_bind(struct wl_registry *reg, uint32_t name,
 static void handle_global_add(void *data, struct wl_registry *reg,
 		uint32_t name, const char *interface, uint32_t version) {
 	struct nwl_state *state = data;
+	if (state->events.global_add &&
+			state->events.global_add(state,reg,name,interface,version)) {
+		return;
+	}
 	if (strcmp(interface,wl_compositor_interface.name) == 0) {
 		state->compositor = nwl_registry_bind(reg, name, &wl_compositor_interface, version);
 	} else if (strcmp(interface,zwlr_layer_shell_v1_interface.name) == 0) {
@@ -154,6 +158,9 @@ static void handle_global_add(void *data, struct wl_registry *reg,
 static void handle_global_remove(void *data, struct wl_registry *reg, uint32_t name) {
 	UNUSED(reg);
 	struct nwl_state *state = data;
+	if (state->events.global_remove) {
+		state->events.global_remove(state,reg,name);
+	}
 	struct nwl_global *glob;
 	wl_list_for_each(glob, &state->globals, link) {
 		if (glob->name == name) {
