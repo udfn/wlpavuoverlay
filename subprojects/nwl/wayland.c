@@ -315,7 +315,6 @@ char nwl_wayland_init(struct nwl_state *state) {
 		return 1;
 	}
 	state->poll->efd = epoll_create1(0);
-	state->poll->ev = calloc(1,sizeof(struct epoll_event));
 	nwl_poll_add_fd(state, wl_display_get_fd(state->display), nwl_wayland_poll_display, NULL);
 	state->registry = wl_display_get_registry(state->display);
 	wl_registry_add_listener(state->registry, &reg_listener, state);

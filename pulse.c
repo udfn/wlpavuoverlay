@@ -186,28 +186,28 @@ static void handle_pulse_event(pa_context *c, pa_subscription_event_type_t t, ui
 	pa_subscription_event_type_t typemasked = t & PA_SUBSCRIPTION_EVENT_TYPE_MASK;
 	if (facilitymasked == PA_SUBSCRIPTION_EVENT_SINK_INPUT) {
 		if (typemasked == PA_SUBSCRIPTION_EVENT_NEW) {
-			pa_context_get_sink_input_info(c, idx, handle_sink_input_info, NULL);
+			pa_operation_unref(pa_context_get_sink_input_info(c, idx, handle_sink_input_info, NULL));
 		} else if (typemasked == PA_SUBSCRIPTION_EVENT_REMOVE) {
 			remove_client_stream(idx);
 			fire_pulse_callback();
 		} else if (typemasked == PA_SUBSCRIPTION_EVENT_CHANGE) {
-			pa_context_get_sink_input_info(c, idx, handle_sink_input_info, NULL);
+			pa_operation_unref(pa_context_get_sink_input_info(c, idx, handle_sink_input_info, NULL));
 		}
 	} else if (facilitymasked == PA_SUBSCRIPTION_EVENT_CLIENT) {
 		if (typemasked == PA_SUBSCRIPTION_EVENT_NEW) {
-			pa_context_get_client_info(c, idx, handle_client_info, NULL);
+			pa_operation_unref(pa_context_get_client_info(c, idx, handle_client_info, NULL));
 		} else if (typemasked == PA_SUBSCRIPTION_EVENT_REMOVE) {
 			remove_client(idx);
 			fire_pulse_callback();
 		}
 	} else if (facilitymasked == PA_SUBSCRIPTION_EVENT_SINK) {
 		if (typemasked == PA_SUBSCRIPTION_EVENT_NEW) {
-			pa_context_get_sink_info_by_index(c, idx, handle_sink_info, NULL);
+			pa_operation_unref(pa_context_get_sink_info_by_index(c, idx, handle_sink_info, NULL));
 		} else if (typemasked == PA_SUBSCRIPTION_EVENT_REMOVE) {
 			remove_sink(idx);
 			fire_pulse_callback();
 		} else if (typemasked == PA_SUBSCRIPTION_EVENT_CHANGE) {
-			pa_context_get_sink_info_by_index(c, idx, handle_sink_info, NULL);
+			pa_operation_unref(pa_context_get_sink_info_by_index(c, idx, handle_sink_info, NULL));
 		}
 	}
 }
@@ -226,7 +226,7 @@ static void handle_pulse_state(pa_context *c, void *userdata) {
 		pa_context_subscribe(pulse_state.context, PA_SUBSCRIPTION_MASK_ALL, handle_pulse_event_success, NULL);
 		pa_context_get_sink_info_list(pulse_state.context, handle_sink_info, NULL);
 		pa_context_get_client_info_list(c, handle_client_info, NULL);
-		pa_context_get_sink_input_info_list(c, handle_sink_input_info, NULL);
+		pa_operation_unref(pa_context_get_sink_input_info_list(c, handle_sink_input_info, NULL));
 		break;
 		default:
 		pulse_state.status = WLPAVUO_AUDIO_STATUS_FAILED;
@@ -235,10 +235,10 @@ static void handle_pulse_state(pa_context *c, void *userdata) {
 }
 
 void wlpavuo_pulse_set_stream_mute(struct wlpavuo_audio_client_stream *stream, char muted) {
-	pa_context_set_sink_input_mute(pulse_state.context, stream->id, muted, handle_pulse_event_success,NULL);
+	pa_operation_unref(pa_context_set_sink_input_mute(pulse_state.context, stream->id, muted, handle_pulse_event_success,NULL));
 }
 void wlpavuo_pulse_set_sink_mute(struct wlpavuo_audio_sink *sink, char muted) {
-	pa_context_set_sink_mute_by_index(pulse_state.context, sink->id, muted, handle_pulse_event_success,NULL);
+	pa_operation_unref(pa_context_set_sink_mute_by_index(pulse_state.context, sink->id, muted, handle_pulse_event_success,NULL));
 }
 
 void wlpavuo_pulse_set_stream_volume(struct wlpavuo_audio_client_stream *stream, uint32_t volume) {
@@ -247,7 +247,7 @@ void wlpavuo_pulse_set_stream_volume(struct wlpavuo_audio_client_stream *stream,
 		vol.values[i] = volume;
 	}
 	vol.channels = stream->channels;
-	pa_context_set_sink_input_volume(pulse_state.context, stream->id, &vol, handle_pulse_event_success,NULL);
+	pa_operation_unref(pa_context_set_sink_input_volume(pulse_state.context, stream->id, &vol, handle_pulse_event_success,NULL));
 }
 
 void wlpavuo_pulse_set_sink_volume(struct wlpavuo_audio_sink *sink, uint32_t volume) {
@@ -256,7 +256,7 @@ void wlpavuo_pulse_set_sink_volume(struct wlpavuo_audio_sink *sink, uint32_t vol
 		vol.values[i] = volume;
 	}
 	vol.channels = sink->channels;
-	pa_context_set_sink_volume_by_index(pulse_state.context, sink->id, &vol, handle_pulse_event_success,NULL);
+	pa_operation_unref(pa_context_set_sink_volume_by_index(pulse_state.context, sink->id, &vol, handle_pulse_event_success,NULL));
 }
 
 enum wlpavuo_audio_status wlpavuo_pulse_init() {
