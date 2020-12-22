@@ -17,7 +17,6 @@
 
 struct nwl_poll {
 	int efd;
-	int dfd;
 	int numfds;
 	struct epoll_event *ev;
 	struct wl_list data; // nwl_poll_data
@@ -271,7 +270,8 @@ void nwl_poll_del_fd(struct nwl_state *state, int fd) {
 	}
 }
 
-static void nwl_wayland_poll_display(struct nwl_state *state) {
+static void nwl_wayland_poll_display(struct nwl_state *state, void *data) {
+	UNUSED(data);
 	wl_display_dispatch(state->display);
 	if (state->destroy_surfaces) {
 		struct nwl_surface *surface;
@@ -296,37 +296,28 @@ void nwl_wayland_run(struct nwl_state *state) {
 			return;
 		}
 		for (int i = 0; i < nfds;i++) {
-			if (state->poll->ev[i].data.fd == state->poll->dfd) {
-				nwl_wayland_poll_display(state);
-			} else {
-				struct nwl_poll_data *data = state->poll->ev[i].data.ptr;
-				data->callback(state, data->userdata);
-			}
+			struct nwl_poll_data *data = state->poll->ev[i].data.ptr;
+			data->callback(state, data->userdata);
 		}
 	}
 }
 
 char nwl_wayland_init(struct nwl_state *state) {
-	state->display = wl_display_connect(NULL);
-	if (!state->display) {
-		fprintf(stderr,"couldn't connect to Wayland display.\n");
-		return 1;
-	}
 	state->poll = calloc(1,sizeof(struct nwl_poll));
-	state->poll->efd = epoll_create1(0);
-	state->poll->ev = calloc(1,sizeof(struct epoll_event));
-	struct epoll_event ep = { 0 };
-	state->poll->dfd = wl_display_get_fd(state->display);
-	ep.data.fd = state->poll->dfd;
-	ep.events = EPOLLIN;
-	state->poll->numfds = 1;
-	epoll_ctl(state->poll->efd, EPOLL_CTL_ADD, state->poll->dfd, &ep);
-	state->registry = wl_display_get_registry(state->display);
 	wl_list_init(&state->seats);
 	wl_list_init(&state->outputs);
 	wl_list_init(&state->surfaces);
 	wl_list_init(&state->globals);
 	wl_list_init(&state->poll->data);
+	state->display = wl_display_connect(NULL);
+	if (!state->display) {
+		fprintf(stderr,"couldn't connect to Wayland display.\n");
+		return 1;
+	}
+	state->poll->efd = epoll_create1(0);
+	state->poll->ev = calloc(1,sizeof(struct epoll_event));
+	nwl_poll_add_fd(state, wl_display_get_fd(state->display), nwl_wayland_poll_display, NULL);
+	state->registry = wl_display_get_registry(state->display);
 	wl_registry_add_listener(state->registry, &reg_listener, state);
 	wl_display_roundtrip(state->display);
 	return 0;
@@ -339,7 +330,9 @@ void nwl_wayland_uninit(struct nwl_state *state) {
 		nwl_surface_destroy(surface);
 	}
 	nwl_egl_uninit(state);
-	xkb_context_unref(state->keyboard_context);
+	if (state->keyboard_context) {
+		xkb_context_unref(state->keyboard_context);
+	}
 	struct nwl_global *glob;
 	struct nwl_global *globtmp;
 	wl_list_for_each_safe(glob, globtmp, &state->globals, link) {
@@ -350,6 +343,7 @@ void nwl_wayland_uninit(struct nwl_state *state) {
 	if (state->cursor_theme) {
 		wl_cursor_theme_destroy(state->cursor_theme);
 	}
+	nwl_poll_del_fd(state, wl_display_get_fd(state->display));
 	wl_display_disconnect(state->display);
 	free(state->poll->ev);
 	close(state->poll->efd);
