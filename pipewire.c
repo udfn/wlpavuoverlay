@@ -27,16 +27,21 @@ struct pipewire_global {
 	struct pw_proxy *proxy; // But is it actually a proxy?
 };
 
-struct pipewire_sink_node {
-	struct pipewire_global *device;
-	struct wlpavuo_audio_sink sinkdata;
-
-	// route stuff, maybe shouldn't be here
+struct pipewire_device {
 	uint32_t r_index;
 	uint32_t r_device;
 	uint32_t r_channels;
 	int r_direction;
 	char *r_name;
+	// ugly memory leakage-ish thing going on here
+	unsigned long volume;
+	bool mute;
+	struct pipewire_global *sink;
+};
+
+struct pipewire_sink_node {
+	struct pipewire_global *device;
+	struct wlpavuo_audio_sink sinkdata;
 };
 
 struct pipewire_stream_node {
@@ -189,24 +194,23 @@ static void device_event_param(void *data, int seq, uint32_t id, uint32_t index,
 		}
 	}
 	struct pipewire_global *glob = data;
-	if (glob->data) {
-		struct pipewire_global *sink = glob->data;
-		struct pipewire_sink_node *sinknode = sink->data;
-		sinknode->r_device = device_id;
-		sinknode->r_index = pod_index;
-		sinknode->r_direction = direction;
-		sinknode->r_channels = num_channels;
-		// uh oh, malloc action
-		if (sinknode->r_name != NULL) {
-			free(sinknode->r_name);
-		}
-		sinknode->r_name = strdup(name);
-		unsigned long pavol = pa_sw_volume_from_linear(vol[0]);
-		sinknode->sinkdata.volume = pavol;
-		sinknode->sinkdata.flags = mute ? WLPAVUO_AUDIO_MUTED : 0;
-		fire_pipewire_callback();
+	struct pipewire_device *device = glob->data;
+	device->r_device = device_id;
+	device->r_index = pod_index;
+	device->r_direction = direction;
+	device->r_channels = num_channels;
+	// uh oh, malloc action
+	if (device->r_name != NULL) {
+		free(device->r_name);
 	}
-
+	device->r_name = strdup(name);
+	device->volume = pa_sw_volume_from_linear(vol[0]);
+	if (device->sink) {
+		struct pipewire_sink_node *sinknode = device->sink->data;
+		sinknode->sinkdata.volume = device->volume;
+		sinknode->sinkdata.flags = mute ? WLPAVUO_AUDIO_MUTED : 0;
+	}
+	fire_pipewire_callback();
 }
 
 struct pw_device_events device_events = {
@@ -231,10 +235,12 @@ static void add_pw_sink(uint32_t id, const struct spa_dict *props, struct pw_nod
 	if (deviceid) {
 		uint32_t id = strtoul(deviceid,NULL,10);
 		sinknode->device = find_pw_global(id);
-		// hack, fix this later!
-		sinknode->device->data = newglob;
-		sinkdata->data = sinknode;
+		if (sinknode->device) {
+			struct pipewire_device *device = sinknode->device->data;
+			device->sink = newglob;
+		}
 	}
+	sinkdata->data = sinknode;
 	wl_list_insert(&pw_state.globals, &newglob->link);
 	wl_list_insert(&pw_state.sinks, &sinkdata->link);
 }
@@ -282,6 +288,7 @@ static void add_pw_client(uint32_t id, const struct spa_dict *props, struct pw_c
 static void add_pw_device(uint32_t id, const struct spa_dict *props, struct pw_device *device) {
 	UNUSED(props);
 	struct pipewire_global *newglob = calloc(1,sizeof(struct pipewire_global));
+	newglob->data = calloc(1,sizeof(struct pipewire_device));
 	newglob->proxy = (struct pw_proxy*)device;
 	pw_device_add_listener(device,&newglob->hook,&device_events,newglob);
 	newglob->id = id;
@@ -330,15 +337,18 @@ static void destroy_global(struct pipewire_global *global) {
 	wl_list_remove(&global->link);
 	pw_proxy_destroy(global->proxy);
 	switch(global->type) {
-		case PIPEWIRE_GLOBAL_TYPE_DEVICE:
+		case PIPEWIRE_GLOBAL_TYPE_DEVICE: {
+			struct pipewire_device *dev = global->data;
+			if (dev->r_name != NULL) {
+				free(dev->r_name);
+			}
+			free(dev);
 			break;
+		}
 		case PIPEWIRE_GLOBAL_TYPE_SINK: {
 			struct pipewire_sink_node *sink = global->data;
 			wl_list_remove(&sink->sinkdata.link);
 			free(sink->sinkdata.name);
-			if (sink->r_name != NULL) {
-				free(sink->r_name);
-			}
 			free(sink);
 			break;
 		}
@@ -485,15 +495,15 @@ static void pipewire_set_stream_mute(struct wlpavuo_audio_client_stream *stream,
 	pw_node_set_param((struct pw_node*)global->proxy,SPA_PARAM_Props,0,param);
 }
 
-static void build_route_pod(struct spa_pod_builder *b, struct pipewire_sink_node *snode) {
+static void build_route_pod(struct spa_pod_builder *b, struct pipewire_device *dev) {
 	spa_pod_builder_prop(b,SPA_PARAM_ROUTE_index,0);
-	spa_pod_builder_int(b, snode->r_index);
+	spa_pod_builder_int(b, dev->r_index);
 	spa_pod_builder_prop(b,SPA_PARAM_ROUTE_device,0);
-	spa_pod_builder_int(b, snode->r_device);
+	spa_pod_builder_int(b, dev->r_device);
 	spa_pod_builder_prop(b,SPA_PARAM_ROUTE_direction,0);
-	spa_pod_builder_id(b, snode->r_direction);
+	spa_pod_builder_id(b, dev->r_direction);
 	spa_pod_builder_prop(b,SPA_PARAM_ROUTE_name,0);
-	spa_pod_builder_string(b, snode->r_name);
+	spa_pod_builder_string(b, dev->r_name);
 }
 
 static void pipewire_set_sink_volume(struct wlpavuo_audio_sink *sink, uint32_t vol) {
@@ -509,14 +519,15 @@ static void pipewire_set_sink_volume(struct wlpavuo_audio_sink *sink, uint32_t v
 	b.size = sizeof(buf);
 	struct spa_pod_frame f;
 	struct spa_pod_frame fin;
+	struct pipewire_device *device = snode->device->data;
 	// Seems like unlike with streams, this needs the full params...
 	// ... why?
 	spa_pod_builder_push_object(&b, &f, SPA_TYPE_OBJECT_ParamRoute, SPA_PARAM_Route);
-	build_route_pod(&b, snode);
+	build_route_pod(&b, device);
 	spa_pod_builder_prop(&b, SPA_PARAM_ROUTE_props,0);
 	spa_pod_builder_push_object(&b, &fin, SPA_TYPE_OBJECT_Props, SPA_PARAM_ROUTE_props);
 	spa_pod_builder_prop(&b,SPA_PROP_channelVolumes,0);
-	spa_pod_builder_array(&b,sizeof(float),SPA_TYPE_Float,snode->r_channels,pwvols);
+	spa_pod_builder_array(&b,sizeof(float),SPA_TYPE_Float,device->r_channels,pwvols);
 	struct spa_pod *param = spa_pod_builder_pop(&b, &fin);
 	param = spa_pod_builder_pop(&b, &f);
 	pw_device_set_param((struct pw_device*)snode->device->proxy,SPA_PARAM_Route,0,param);
@@ -531,7 +542,7 @@ static void pipewire_set_sink_mute(struct wlpavuo_audio_sink *sink, char mute) {
 	struct spa_pod_frame f;
 	struct spa_pod_frame fin;
 	spa_pod_builder_push_object(&b, &f, SPA_TYPE_OBJECT_ParamRoute, SPA_PARAM_Route);
-	build_route_pod(&b, snode);
+	build_route_pod(&b, (struct pipewire_device*)snode->device->data);
 	spa_pod_builder_prop(&b, SPA_PARAM_ROUTE_props,0);
 	spa_pod_builder_push_object(&b, &fin, SPA_TYPE_OBJECT_Props, SPA_PARAM_ROUTE_props);
 	spa_pod_builder_prop(&b,SPA_PROP_mute,0);

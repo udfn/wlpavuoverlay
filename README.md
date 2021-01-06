@@ -10,7 +10,7 @@ Just run `wlpavuoverlay` and it'll use layer-shell to show itself over everythin
 You can add arguments to change the behaviour.
 * `xdg` - Use xdg-shell even if layer-shell is available.
 * `dim` - "Fullscreen" mode. This makes mouse usage easier if another surface has locked or hidden the pointer. Only with layer-shell.
-* `pw` - Use PipeWire instead of PulseAudio. Very unfinished, do not use.
+* `pw` - Use PipeWire instead of PulseAudio.
 * `shm` - Use software rendering instead of GL. Not sure why you'd want this...
 
 There are currently hardcoded keyboard commands..
@@ -43,7 +43,7 @@ Many, but you probably already have most of these...
 - [ ] Fractional scaling (how? Wayland only allows integer scales for buffers)
 - [x] Generate the protocol headers & code during build
 - [ ] Audio level meters, like `pavucontrol`
-- [ ] PipeWire support
+- [x] PipeWire support
 - [ ] Advanced PipeWire features (graph view, video streams, etc..)
 ## License?
 Unlicense. See the file `UNLICENSE` for the full text, or https://unlicense.org
