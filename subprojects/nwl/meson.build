@@ -21,7 +21,8 @@ nwl_src = [
 	'egl.c',
 	'shell.c',
 	'surface.c',
-	'wayland.c'
+	'wayland.c',
+	'cairo.c'
 ]
 nwl_deps = [
 	wayland_client,

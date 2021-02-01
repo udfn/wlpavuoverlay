@@ -39,11 +39,6 @@ static char nwl_egl_init(struct nwl_state *state) {
 		fprintf(stderr,"failed to create EGL context\n");
 		return 1;
 	}
-	state->egl.cairo_dev = cairo_egl_device_create(state->egl.display, state->egl.context);
-	if (!state->egl.cairo_dev) {
-		fprintf(stderr,"failed to create Cairo device\n");
-		return 1;
-	}
 	return 0;
 }
 
@@ -59,12 +54,6 @@ void nwl_egl_uninit(struct nwl_state *state) {
 
 bool nwl_egl_try_init(struct nwl_state *state) {
 	if (nwl_egl_init(state)) {
-		nwl_egl_uninit(state);
-		state->egl.inited = 2;
-		return false;
-	}
-	if (cairo_device_status(state->egl.cairo_dev) != CAIRO_STATUS_SUCCESS) {
-		fprintf(stderr,"couldn't get Cairo device status %i\n",cairo_device_status(state->egl.cairo_dev));
 		nwl_egl_uninit(state);
 		state->egl.inited = 2;
 		return false;

@@ -18,8 +18,8 @@
 #include "xdg-decoration-unstable-v1.h"
 #include "viewporter.h"
 
-static bool surface_render(struct nwl_surface *surf) {
-	cairo_t *cr = cairo_create(surf->cairo_surface);
+static bool surface_render(struct nwl_surface *surf, cairo_surface_t *cairo_surface) {
+	cairo_t *cr = cairo_create(cairo_surface);
 	char ret = wlpavuo_ui_run(surf, cr);
 	if (surf->flags & NWL_SURFACE_FLAG_DESTROY) {
 		ret = false;
@@ -35,12 +35,12 @@ struct bgstatus_t {
 	struct nwl_surface *main_surface;
 };
 
-static bool background_surface_render(struct nwl_surface *surf) {
+static bool background_surface_render(struct nwl_surface *surf, cairo_surface_t *cairo_surface) {
 	char ret = 0;
 	bool bgdrawn = false;
 	struct bgstatus_t *bgstatus = surf->userdata;
 	if (!bgstatus->bgrendered) {
-		cairo_t *cr = cairo_create(surf->cairo_surface);
+		cairo_t *cr = cairo_create(cairo_surface);
 		cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
 		cairo_rectangle(cr, 0,0,surf->width,surf->height);
 		cairo_set_source_rgba(cr, 0., 0,0, 0.45);
@@ -51,7 +51,7 @@ static bool background_surface_render(struct nwl_surface *surf) {
 	}
 	struct nwl_surface *subsurf;
 	wl_list_for_each(subsurf, &surf->subsurfaces, sublink) {
-		if (subsurf->impl.render(subsurf)) {
+		if (subsurf->renderer.impl->render(subsurf)) {
 			nwl_surface_swapbuffers(subsurf);
 			ret = 1;
 		}
@@ -117,7 +117,7 @@ enum wlpavuo_surface_layer_mode {
 };
 
 static void setup_wlpavuo_ui_surface(struct nwl_surface *surf) {
-	surf->impl.render = surface_render;
+	nwl_surface_renderer_cairo(surf, surface_render);
 	surf->impl.destroy = wlpavuo_ui_destroy;
 	surf->impl.input_pointer = wlpavuo_ui_input_pointer;
 	surf->impl.input_keyboard = wlpavuo_ui_input_keyboard;
@@ -135,11 +135,11 @@ static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_m
 			//surf->flags = surf->flags & ~WLPAVUO_SURFACE_FLAG_CSD;
 		} else {
 			surf->userdata = calloc(1,sizeof(struct bgstatus_t));
-			surf->impl.render = background_surface_render;
 			surf->impl.destroy = background_surface_destroy;
 			surf->impl.input_pointer = background_surface_input_pointer;
 			surf->impl.input_keyboard = background_surface_input_keyboard;
 			surf->impl.configure = background_surface_configure;
+			nwl_surface_renderer_cairo(surf, background_surface_render);
 			struct bgstatus_t *bgs = surf->userdata;
 			zwlr_layer_surface_v1_set_anchor(surf->wl.layer_surface,
 				ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM|ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP|

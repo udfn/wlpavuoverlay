@@ -10,7 +10,6 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <time.h>
-#include <cairo/cairo-gl.h>
 #include "wlr-layer-shell-unstable-v1.h"
 #include "xdg-shell.h"
 #include "viewporter.h"
@@ -57,16 +56,6 @@ static int allocate_shm_file(size_t size) {
 	return fd;
 }
 
-struct nwl_surface_shm {
-	int fd;
-	uint8_t *data;
-	struct wl_shm_pool *pool;
-	size_t size;
-	int32_t stride;
-	char *name;
-	struct wl_buffer *buffer;
-};
-
 static void destroy_shm_pool(struct nwl_surface_shm *shm) {
 	wl_shm_pool_destroy(shm->pool);
 	munmap(shm->data, shm->size);
@@ -77,7 +66,7 @@ static void allocate_wl_shm_pool(struct nwl_surface *surface) {
 	struct nwl_surface_shm *shm = surface->render.data;
 	uint32_t scaled_width = surface->width * surface->scale;
 	uint32_t scaled_height = surface->height * surface->scale;
-	int stride = cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, scaled_width);
+	int stride = surface->renderer.impl->get_stride(WL_SHM_FORMAT_ARGB8888, scaled_width);
 	shm->stride = stride;
 	int pool_size = scaled_height * stride * 2;
 	if (shm->fd) {
@@ -87,13 +76,13 @@ static void allocate_wl_shm_pool(struct nwl_surface *surface) {
 	shm->fd = fd;
 	shm->data = mmap(NULL,pool_size,PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
 	shm->pool = wl_shm_create_pool(surface->state->shm, fd, pool_size);
-	surface->cairo_surface = cairo_image_surface_create_for_data(shm->data,CAIRO_FORMAT_ARGB32,scaled_width,scaled_height,stride);
+	surface->renderer.impl->surface_create(surface, NWL_SURFACE_RENDER_SHM, scaled_width, scaled_height);
 	return;
 }
 
 static void shm_surface_destroy(struct nwl_surface *surface) {
 	struct nwl_surface_shm *shm = surface->render.data;
-	cairo_surface_destroy(surface->cairo_surface);
+	surface->renderer.impl->surface_destroy(surface, NWL_SURFACE_RENDER_SHM);
 	destroy_shm_pool(shm);
 	free(surface->render.data);
 }
@@ -105,7 +94,7 @@ static void shm_surface_swapbuffers(struct nwl_surface *surface) {
 	}
 	uint32_t scaled_width = surface->width*surface->scale;
 	uint32_t scaled_height = surface->height*surface->scale;
-	shm->buffer = wl_shm_pool_create_buffer(shm->pool, 0, scaled_width,scaled_height, shm->stride, WL_SHM_FORMAT_ARGB8888);
+	shm->buffer = wl_shm_pool_create_buffer(shm->pool, 0, scaled_width, scaled_height, shm->stride, WL_SHM_FORMAT_ARGB8888);
 	wl_surface_attach(surface->wl.surface, shm->buffer, 0,0);
 	wl_surface_damage(surface->wl.surface, 0,0, scaled_width,scaled_height);
 	wl_surface_commit(surface->wl.surface);
@@ -121,14 +110,9 @@ static void surface_render_set_shm(struct nwl_surface *surface) {
 	surface->render.impl.swapbuffers = shm_surface_swapbuffers;
 }
 
-struct nwl_surface_egl {
-	struct wl_egl_window *window;
-	EGLSurface surface;
-};
-
 static void egl_surface_destroy(struct nwl_surface *surface) {
 	struct nwl_surface_egl *egl = surface->render.data;
-	cairo_surface_destroy(surface->cairo_surface);
+	surface->renderer.impl->surface_destroy(surface, NWL_SURFACE_RENDER_EGL);
 	wl_egl_window_destroy(egl->window);
 	eglDestroySurface(surface->state->egl.display, egl->surface);
 	free(surface->render.data);
@@ -142,15 +126,15 @@ static void egl_surface_applysize(struct nwl_surface *surface) {
 		struct nwl_surface_egl *egl = surface->render.data;
 		egl->window = wl_egl_window_create(surface->wl.surface, scaled_width, scaled_height);
 		egl->surface = eglCreatePlatformWindowSurfaceEXT(surface->state->egl.display, surface->state->egl.config, egl->window, NULL);
-		surface->cairo_surface = cairo_gl_surface_create_for_egl(surface->state->egl.cairo_dev, egl->surface, scaled_width,scaled_height);
+		surface->renderer.impl->surface_create(surface, NWL_SURFACE_RENDER_EGL, scaled_width, scaled_height);
 	} else {
 		wl_egl_window_resize(egl->window, scaled_width,scaled_height,0,0);
-		cairo_gl_surface_set_size(surface->cairo_surface, scaled_width,scaled_height);
+		surface->renderer.impl->surface_set_size(surface, scaled_width, scaled_height);
 	}
 }
 
 static void egl_surface_swapbuffers(struct nwl_surface *surface) {
-	cairo_gl_surface_swapbuffers(surface->cairo_surface);
+	surface->renderer.impl->swap_buffers(surface);
 }
 
 static void surface_render_set_egl(struct nwl_surface *surface) {
@@ -190,7 +174,7 @@ static void cb_done(void *data, struct wl_callback *cb, uint32_t cb_data) {
 	}
 	if (surf->flags & NWL_SURFACE_FLAG_NEEDS_DRAW) {
 		surf->flags = surf->flags & ~NWL_SURFACE_FLAG_NEEDS_DRAW;
-		if (surf->impl.render(surf)) {
+		if (surf->renderer.impl->render(surf)) {
 			nwl_surface_swapbuffers(surf);
 		}
 	}
@@ -385,7 +369,7 @@ void nwl_surface_set_need_draw(struct nwl_surface *surface, bool render) {
 			if (surface->flags & NWL_SURFACE_FLAG_NEEDS_APPLYSIZE) {
 				nwl_surface_real_apply_size(surface);
 			}
-			if (surface->impl.render(surface)) {
+			if (surface->renderer.impl->render(surface)) {
 				nwl_surface_swapbuffers(surface);
 			}
 		} else {

@@ -38,6 +38,46 @@ typedef void (*nwl_surface_input_keyboard_t)(struct nwl_surface *surface, struct
 
 typedef void (*nwl_surface_generic_func_t)(struct nwl_surface *surface);
 
+// Should probably be renamed to something like allocator?
+// This is confusing!
+enum nwl_surface_renderer {
+	NWL_SURFACE_RENDER_SHM,
+	NWL_SURFACE_RENDER_EGL,
+	// Maybe...
+	// NWL_SURFACE_RENDER_VK
+};
+
+struct nwl_surface_shm {
+	int fd;
+	uint8_t *data;
+	struct wl_shm_pool *pool;
+	size_t size;
+	int32_t stride;
+	char *name;
+	struct wl_buffer *buffer;
+};
+
+struct nwl_surface_egl {
+	struct wl_egl_window *window;
+	EGLSurface surface;
+};
+
+struct nwl_renderer_impl {
+	int (*get_stride)(enum wl_shm_format format, uint32_t width);
+	void (*surface_create)(struct nwl_surface *surface, enum nwl_surface_renderer renderer, uint32_t scaled_width, uint32_t scaled_height);
+	void (*surface_set_size)(struct nwl_surface *surface, uint32_t scaled_width, uint32_t scaled_height);
+	void (*surface_destroy)(struct nwl_surface *surface, enum nwl_surface_renderer renderer);
+	void (*swap_buffers)(struct nwl_surface *surface);
+	nwl_surface_render_t render;
+};
+
+// Cairo.. or whatever you want, really!
+// This should handle the EGL & SHM whatever stuff rather than the weird spaghetti it is now..
+struct nwl_renderer {
+	struct nwl_renderer_impl *impl;
+	void *data;
+};
+
 struct nwl_surface {
 	struct wl_list link; // link for nwl_state
 	struct wl_list sublink; // subsurface link
@@ -60,7 +100,7 @@ struct nwl_surface {
 			nwl_surface_generic_func_t destroy;
 		} impl;
 	} render;
-	cairo_surface_t *cairo_surface;
+	struct nwl_renderer renderer;
 	uint32_t width, height;
 	uint32_t desired_width, desired_height;
 	uint32_t actual_width, actual_height;
@@ -74,18 +114,12 @@ struct nwl_surface {
 	uint32_t configure_serial; // This should probably be moved to a separate role thing..
 	uint32_t frame;
 	struct {
-		nwl_surface_render_t render;
 		nwl_surface_destroy_t destroy;
 		nwl_surface_input_pointer_t input_pointer;
 		nwl_surface_input_keyboard_t input_keyboard;
 		nwl_surface_configure_t configure;
 	} impl;
 	void *userdata;
-};
-
-enum nwl_surface_renderer {
-	NWL_SURFACE_RENDER_SHM,
-	NWL_SURFACE_RENDER_EGL
 };
 
 struct nwl_surface *nwl_surface_create(struct nwl_state *state,char *title, enum nwl_surface_renderer renderer);
@@ -101,4 +135,6 @@ void nwl_surface_role_subsurface(struct nwl_surface *parent, struct nwl_surface 
 char nwl_surface_role_layershell(struct nwl_surface *surface, struct wl_output *output, uint32_t layer);
 char nwl_surface_role_toplevel(struct nwl_surface *surface);
 
+typedef bool (*nwl_surface_cairo_render_t)(struct nwl_surface *surface, cairo_surface_t *cairo_surface);
+void nwl_surface_renderer_cairo(struct nwl_surface *surface, nwl_surface_cairo_render_t renderfunc);
 #endif

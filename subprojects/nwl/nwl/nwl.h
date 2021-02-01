@@ -45,6 +45,7 @@ struct nwl_state {
 		EGLDisplay display;
 		EGLConfig config;
 		EGLContext context;
+		// This shouldn't be here..
 		cairo_device_t *cairo_dev;
 		char inited;
 	} egl;
