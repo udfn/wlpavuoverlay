@@ -3,7 +3,6 @@
 #define UNUSED(x) (void)(x)
 #include <stdbool.h>
 #include <EGL/egl.h>
-#include <cairo/cairo.h>
 #include <wayland-util.h>
 #include "seat.h"
 
@@ -24,6 +23,16 @@ struct nwl_output {
 	int scale;
 	char *name;
 };
+// Need a better name for these
+struct nwl_state_sub_impl {
+	void (*destroy)(void *data);
+};
+
+struct nwl_state_sub {
+	struct wl_list link;
+	void *data;
+	struct nwl_state_sub_impl *impl;
+};
 
 struct nwl_state {
 	struct wl_display *display;
@@ -40,13 +49,12 @@ struct nwl_state {
 	struct wl_list outputs; // nwl_output
 	struct wl_list surfaces; // nwl_surface
 	struct wl_list globals; // nwl_global
+	struct wl_list subs; // nwl_state_sub
 	struct xkb_context *keyboard_context;
 	struct {
 		EGLDisplay display;
 		EGLConfig config;
 		EGLContext context;
-		// This shouldn't be here..
-		cairo_device_t *cairo_dev;
 		char inited;
 	} egl;
 
@@ -75,6 +83,8 @@ typedef void (*nwl_poll_callback_t)(struct nwl_state *state, void* data);
 char nwl_wayland_init(struct nwl_state *state);
 void nwl_wayland_uninit(struct nwl_state *state);
 void nwl_wayland_run(struct nwl_state *state);
+void nwl_state_add_sub(struct nwl_state *state, struct nwl_state_sub_impl *subimpl, void *data);
+void *nwl_state_get_sub(struct nwl_state *state, struct nwl_state_sub_impl *subimpl);
 void nwl_poll_add_fd(struct nwl_state *state, int fd, // pollin, pollout, edge trigger, etc?
 	nwl_poll_callback_t callback, void *data);
 void nwl_poll_del_fd(struct nwl_state *state, int fd);

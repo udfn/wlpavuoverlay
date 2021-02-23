@@ -12,6 +12,7 @@
 #include <cairo/cairo.h>
 #include <nwl/nwl.h>
 #include <nwl/surface.h>
+#include <nwl/cairo.h>
 #include "ui.h"
 #include "wlr-layer-shell-unstable-v1.h"
 #include "xdg-shell.h"

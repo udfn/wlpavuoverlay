@@ -309,6 +309,7 @@ char nwl_wayland_init(struct nwl_state *state) {
 	wl_list_init(&state->surfaces);
 	wl_list_init(&state->globals);
 	wl_list_init(&state->poll->data);
+	wl_list_init(&state->subs);
 	state->display = wl_display_connect(NULL);
 	if (!state->display) {
 		fprintf(stderr,"couldn't connect to Wayland display.\n");
@@ -327,6 +328,13 @@ void nwl_wayland_uninit(struct nwl_state *state) {
 	struct nwl_surface *surfacetmp;
 	wl_list_for_each_safe(surface, surfacetmp, &state->surfaces, link) {
 		nwl_surface_destroy(surface);
+	}
+	struct nwl_state_sub *sub;
+	struct nwl_state_sub *subtmp;
+	wl_list_for_each_safe(sub, subtmp, &state->subs, link) {
+		sub->impl->destroy(sub->data);
+		wl_list_remove(&sub->link);
+		free(sub);
 	}
 	nwl_egl_uninit(state);
 	if (state->keyboard_context) {
@@ -347,4 +355,21 @@ void nwl_wayland_uninit(struct nwl_state *state) {
 	free(state->poll->ev);
 	close(state->poll->efd);
 	free(state->poll);
+}
+
+// These should be moved into state.c or something..
+void *nwl_state_get_sub(struct nwl_state *state, struct nwl_state_sub_impl *subimpl) {
+	struct nwl_state_sub *sub;
+	wl_list_for_each(sub, &state->subs, link) {
+		if (sub->impl == subimpl) {
+			return sub->data;
+		}
+	}
+	return NULL; // EVIL NULL POINTER!
+}
+void nwl_state_add_sub(struct nwl_state *state, struct nwl_state_sub_impl *subimpl, void *data) {
+	struct nwl_state_sub *sub = calloc(1, sizeof(struct nwl_state_sub));
+	sub->data = data;
+	sub->impl = subimpl;
+	wl_list_insert(&state->subs, &sub->link);
 }

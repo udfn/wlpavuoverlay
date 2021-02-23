@@ -1,6 +1,4 @@
 #include <epoxy/egl.h>
-#include <cairo/cairo-gl.h>
-#include <cairo.h>
 #include <stdio.h>
 #include "nwl/nwl.h"
 
@@ -45,9 +43,6 @@ static char nwl_egl_init(struct nwl_state *state) {
 void nwl_egl_uninit(struct nwl_state *state) {
 	if (state->egl.context) {
 		eglDestroyContext(state->egl.display, state->egl.context);
-	}
-	if (state->egl.cairo_dev) {
-		cairo_device_destroy(state->egl.cairo_dev);
 	}
 	eglTerminate(state->egl.display);
 }

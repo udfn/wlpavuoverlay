@@ -2,11 +2,27 @@
 #include <cairo-gl.h>
 #include <stdlib.h>
 #include "nwl/surface.h"
+#include "nwl/cairo.h"
 #include "nwl/nwl.h"
 
 struct nwl_cairo_renderer_data {
 	cairo_surface_t *surface;
 	nwl_surface_cairo_render_t renderfunc;
+};
+struct nwl_cairo_state_data {
+	cairo_device_t *cairo_dev;
+};
+
+static void nwl_cairo_state_destroy(void *data) {
+	struct nwl_cairo_state_data *cairodata = data;
+	if (cairodata->cairo_dev) {
+		cairo_device_destroy(cairodata->cairo_dev);
+	}
+	free(cairodata);
+}
+
+struct nwl_state_sub_impl cairo_subimpl = {
+	nwl_cairo_state_destroy
 };
 
 static void nwl_cairo_set_size(struct nwl_surface *surface, uint32_t scaled_width, uint32_t scaled_height) {
@@ -21,10 +37,15 @@ static void nwl_cairo_create(struct nwl_surface *surface, enum nwl_surface_rende
 		c->surface = cairo_image_surface_create_for_data(shm->data, CAIRO_FORMAT_ARGB32, scaled_width, scaled_height, shm->stride);
 	} else {
 		struct nwl_surface_egl *egl = surface->render.data;
-		if (!surface->state->egl.cairo_dev) {
-			surface->state->egl.cairo_dev = cairo_egl_device_create(surface->state->egl.display, surface->state->egl.context);
+		struct nwl_cairo_state_data *statedata = nwl_state_get_sub(surface->state, &cairo_subimpl);
+		if (!statedata) {
+			statedata = calloc(1, sizeof(struct nwl_cairo_state_data));
+			nwl_state_add_sub(surface->state, &cairo_subimpl, statedata);
 		}
-		c->surface = cairo_gl_surface_create_for_egl(surface->state->egl.cairo_dev, egl->surface, scaled_width, scaled_height);
+		if (!statedata->cairo_dev) {
+			statedata->cairo_dev = cairo_egl_device_create(surface->state->egl.display, surface->state->egl.context);
+		}
+		c->surface = cairo_gl_surface_create_for_egl(statedata->cairo_dev, egl->surface, scaled_width, scaled_height);
 	}
 }
 
