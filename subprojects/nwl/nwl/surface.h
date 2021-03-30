@@ -1,5 +1,5 @@
-#ifndef _WLPV_SURFACE_H
-#define _WLPV_SURFACE_H
+#ifndef _NWL_SURFACE_H
+#define _NWL_SURFACE_H
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -10,10 +10,9 @@ typedef void* EGLSurface;
 
 enum nwl_surface_flags {
 	NWL_SURFACE_FLAG_NEEDS_DRAW = 1 << 0,
-	NWL_SURFACE_FLAG_NEEDS_APPLYSIZE = 1 << 1,
-	NWL_SURFACE_FLAG_CSD = 1 << 2,
-	NWL_SURFACE_FLAG_DESTROY = 1 << 3,
-	NWL_SURFACE_FLAG_NO_AUTOSCALE = 1 << 4,
+	NWL_SURFACE_FLAG_CSD = 1 << 1,
+	NWL_SURFACE_FLAG_DESTROY = 1 << 2,
+	NWL_SURFACE_FLAG_NO_AUTOSCALE = 1 << 3,
 };
 
 // This is basically the xdg toplevel states..

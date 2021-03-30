@@ -96,7 +96,7 @@ static void shm_surface_swapbuffers(struct nwl_surface *surface) {
 	uint32_t scaled_height = surface->height*surface->scale;
 	shm->buffer = wl_shm_pool_create_buffer(shm->pool, 0, scaled_width, scaled_height, shm->stride, WL_SHM_FORMAT_ARGB8888);
 	wl_surface_attach(surface->wl.surface, shm->buffer, 0,0);
-	wl_surface_damage(surface->wl.surface, 0,0, scaled_width,scaled_height);
+	wl_surface_damage(surface->wl.surface, 0,0, scaled_width, scaled_height);
 	wl_surface_commit(surface->wl.surface);
 }
 
@@ -128,7 +128,7 @@ static void egl_surface_applysize(struct nwl_surface *surface) {
 		egl->surface = eglCreatePlatformWindowSurfaceEXT(surface->state->egl.display, surface->state->egl.config, egl->window, NULL);
 		surface->renderer.impl->surface_create(surface, NWL_SURFACE_RENDER_EGL, scaled_width, scaled_height);
 	} else {
-		wl_egl_window_resize(egl->window, scaled_width,scaled_height,0,0);
+		wl_egl_window_resize(egl->window, scaled_width, scaled_height, 0, 0);
 		surface->renderer.impl->surface_set_size(surface, scaled_width, scaled_height);
 	}
 }
@@ -154,24 +154,19 @@ static void surface_render_set_egl(struct nwl_surface *surface) {
 	surface->render.impl.destroy = egl_surface_destroy;
 	surface->render.impl.applysize = egl_surface_applysize;
 	surface->render.impl.swapbuffers = egl_surface_swapbuffers;
-
 }
 
 struct wl_callback_listener callback_listener;
 
 static void nwl_surface_real_apply_size(struct nwl_surface *surface) {
-	surface->flags = surface->flags & ~NWL_SURFACE_FLAG_NEEDS_APPLYSIZE;
-	wl_surface_set_buffer_scale(surface->wl.surface, surface->scale);
 	surface->render.impl.applysize(surface);
+	wl_surface_set_buffer_scale(surface->wl.surface, surface->scale);
 }
 
 static void cb_done(void *data, struct wl_callback *cb, uint32_t cb_data) {
 	UNUSED(cb_data);
 	wl_callback_destroy(cb);
 	struct nwl_surface *surf = (struct nwl_surface*)data;
-	if (surf->flags & NWL_SURFACE_FLAG_NEEDS_APPLYSIZE) {
-		nwl_surface_real_apply_size(surf);
-	}
 	if (surf->flags & NWL_SURFACE_FLAG_NEEDS_DRAW) {
 		surf->flags = surf->flags & ~NWL_SURFACE_FLAG_NEEDS_DRAW;
 		if (surf->renderer.impl->render(surf)) {
@@ -340,13 +335,17 @@ void nwl_surface_apply_size(struct nwl_surface *surface) {
 		sub->scale = surface->scale;
 		nwl_surface_apply_size(sub);
 	}
-	surface->flags |= NWL_SURFACE_FLAG_NEEDS_APPLYSIZE;
 	// Disgusting subsurface hack
 	if (surface->parent) {
 		nwl_surface_real_apply_size(surface);
 		return;
 	}
-	nwl_surface_set_need_draw(surface, true);
+	nwl_surface_real_apply_size(surface);
+	if (!(surface->flags & NWL_SURFACE_FLAG_NEEDS_DRAW)) {
+		nwl_surface_set_need_draw(surface, true);
+	} else {
+		wl_surface_commit(surface->wl.surface);
+	}
 }
 
 void nwl_surface_swapbuffers(struct nwl_surface *surface) {
@@ -366,9 +365,6 @@ void nwl_surface_set_need_draw(struct nwl_surface *surface, bool render) {
 		wl_callback_add_listener(surface->wl.frame_cb, &callback_listener, surface);
 		wl_surface_commit(surface->wl.surface);
 		if (render) {
-			if (surface->flags & NWL_SURFACE_FLAG_NEEDS_APPLYSIZE) {
-				nwl_surface_real_apply_size(surface);
-			}
 			if (surface->renderer.impl->render(surface)) {
 				nwl_surface_swapbuffers(surface);
 			}
