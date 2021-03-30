@@ -2,6 +2,7 @@
 #include <wayland-client.h>
 #include <wayland-cursor.h>
 #include <linux/input-event-codes.h>
+#include <xkbcommon/xkbcommon.h>
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/timerfd.h>

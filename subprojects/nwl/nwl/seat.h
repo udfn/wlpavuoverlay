@@ -1,8 +1,9 @@
-#ifndef _WLPV_SEAT_H_
-#define _WLPV_SEAT_H_
-#include <xkbcommon/xkbcommon.h>
+#ifndef _NWL_SEAT_H_
+#define _NWL_SEAT_H_
+
 #include <stdint.h>
 #include <wayland-util.h>
+typedef uint32_t xkb_keysym_t;
 
 struct nwl_seat {
 	struct nwl_state *state;

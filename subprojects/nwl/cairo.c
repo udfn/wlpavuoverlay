@@ -1,6 +1,7 @@
 #include <cairo.h>
 #include <cairo-gl.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include "nwl/surface.h"
 #include "nwl/cairo.h"
 #include "nwl/nwl.h"

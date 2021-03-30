@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <cairo-gl.h>
 #include <cairo.h>
+#include <xkbcommon/xkbcommon.h>
 #include <nwl/surface.h>
 #include "ui.h"
 #include "nuklear.h"

@@ -312,7 +312,7 @@ char nwl_wayland_init(struct nwl_state *state) {
 	wl_list_init(&state->subs);
 	state->display = wl_display_connect(NULL);
 	if (!state->display) {
-		fprintf(stderr,"couldn't connect to Wayland display.\n");
+		fprintf(stderr, "couldn't connect to Wayland display.\n");
 		return 1;
 	}
 	state->poll->efd = epoll_create1(0);
