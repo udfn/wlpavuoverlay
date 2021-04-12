@@ -2,8 +2,11 @@
 #define _NWL_SEAT_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <wayland-util.h>
+
 typedef uint32_t xkb_keysym_t;
+typedef uint32_t xkb_keycode_t;
 
 struct nwl_seat {
 	struct nwl_state *state;
@@ -13,6 +16,9 @@ struct nwl_seat {
 	struct wl_keyboard *keyboard;
 	struct xkb_keymap *keyboard_keymap;
 	struct xkb_state *keyboard_state;
+	bool keyboard_compose_enabled; // Recommended when typing! Maybe move this to surface?
+	struct xkb_compose_state *keyboard_compose_state;
+	struct xkb_compose_table *keyboard_compose_table;
 	struct nwl_surface *keyboard_focus;
 	int32_t keyboard_repeat_rate;
 	int32_t keyboard_repeat_delay;
@@ -83,11 +89,21 @@ enum nwl_keyboard_event_type {
 	NWL_KEYBOARD_EVENT_MODIFIERS,
 };
 
+enum nwl_keyboard_compose_state {
+	NWL_KEYBOARD_COMPOSE_NONE,
+	NWL_KEYBOARD_COMPOSE_COMPOSING,
+	NWL_KEYBOARD_COMPOSE_COMPOSED
+};
+
 struct nwl_keyboard_event {
 	struct nwl_seat *seat;
 	char type; // nwl_keyboard_event_type
+	char compose_state; // nwl_keyboard_compose_state
 	char focus;
+	// If the compose state is composed then keysym and utf8 is the composed sym!
 	xkb_keysym_t keysym;
+	xkb_keycode_t keycode;
+	char utf8[16];
 	uint32_t serial;
 };
 
