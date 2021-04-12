@@ -324,9 +324,11 @@ void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_keyboard_
 	if (event->type == NWL_KEYBOARD_EVENT_KEYDOWN || event->type == NWL_KEYBOARD_EVENT_KEYREPEAT) {
 		switch (event->keysym) {
 			case XKB_KEY_h:
+			case XKB_KEY_Left:
 				ui->input.adjust_vol -= 2500;
 				break;
 			case XKB_KEY_l:
+			case XKB_KEY_Right:
 				ui->input.adjust_vol += 2500;
 				break;
 			case XKB_KEY_H:
@@ -336,18 +338,23 @@ void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_keyboard_
 				ui->input.adjust_vol += 10000;
 				break;
 			case XKB_KEY_j:
+			case XKB_KEY_J:
+			case XKB_KEY_Down:
 				if (ui->num_items-1 > ui->input.selected) {
 					ui->input.selected++;
 				}
 				ui->input.scroll_to_selected = 1;
 				break;
 			case XKB_KEY_k:
+			case XKB_KEY_K:
+			case XKB_KEY_Up:
 				if (ui->input.selected > 0) {
 					ui->input.selected--;
 				}
 				ui->input.scroll_to_selected = 1;
 				break;
 			case XKB_KEY_m:
+			case XKB_KEY_M:
 				ui->input.mute_selected = 1;
 				break;
 		}
