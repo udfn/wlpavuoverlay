@@ -14,8 +14,8 @@ You can add arguments to change the behaviour.
 * `shm` - Use software rendering instead of GL. Not sure why you'd want this...
 
 There are currently hardcoded keyboard commands..
-* **j k** - move down / up
-* **h l** - adjust selected volume lower / higher, hold shift for a larger adjustment
+* **j🠯 k🠭** - move down / up
+* **h🠬 l🠮** - adjust selected volume lower / higher, hold shift for a larger adjustment
 * **m** - toggle mute on selected
 ## Compiling
 This is a simple Meson project, so the good old `meson build` `ninja -C build` is a good start.

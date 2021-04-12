@@ -41,6 +41,7 @@ struct wlpavuo_ui {
 		int selected;
 		char mute_selected;
 		char scroll_to_selected;
+		char num_shifts;
 	} input;
 	const struct wlpavuo_audio_impl *backend;
 	int num_items;
@@ -322,20 +323,17 @@ void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_keyboard_
 	// This stuff shouldn't depend on the interface rendering..
 	// It should also be rebindable..
 	if (event->type == NWL_KEYBOARD_EVENT_KEYDOWN || event->type == NWL_KEYBOARD_EVENT_KEYREPEAT) {
+		int adjust_amount = ui->input.num_shifts ? 10000 : 2500;
 		switch (event->keysym) {
 			case XKB_KEY_h:
 			case XKB_KEY_Left:
-				ui->input.adjust_vol -= 2500;
+			case XKB_KEY_H:
+				ui->input.adjust_vol -= adjust_amount;
 				break;
 			case XKB_KEY_l:
 			case XKB_KEY_Right:
-				ui->input.adjust_vol += 2500;
-				break;
-			case XKB_KEY_H:
-				ui->input.adjust_vol -= 10000;
-				break;
 			case XKB_KEY_L:
-				ui->input.adjust_vol += 10000;
+				ui->input.adjust_vol += adjust_amount;
 				break;
 			case XKB_KEY_j:
 			case XKB_KEY_J:
@@ -357,13 +355,28 @@ void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_keyboard_
 			case XKB_KEY_M:
 				ui->input.mute_selected = 1;
 				break;
+			case XKB_KEY_Shift_L:
+			case XKB_KEY_Shift_R:
+				if (event->type == NWL_KEYBOARD_EVENT_KEYDOWN) {
+					ui->input.num_shifts++;
+				}
+				break;
 		}
 	} else if (event->type == NWL_KEYBOARD_EVENT_KEYUP) {
-		if (event->keysym == XKB_KEY_Escape) {
+		switch (event->keysym) {
+			case XKB_KEY_Escape:
 				surface->state->num_surfaces = 0;
+				break;
+			case XKB_KEY_Shift_L:
+			case XKB_KEY_Shift_R:
+				if (ui->input.num_shifts > 0) {
+					ui->input.num_shifts--;
+				}
+				break;
+
 		}
 	}
-	nwl_surface_set_need_draw(surface,true);
+	nwl_surface_set_need_draw(surface, true);
 }
 
 void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_pointer_event *event) {

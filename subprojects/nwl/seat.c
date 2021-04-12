@@ -148,9 +148,9 @@ static void handle_keyboard_key(
 	}
 	struct nwl_keyboard_event *event = seat->keyboard_event;
 	event->keycode = key+8;
+	event->keysym = xkb_state_key_get_one_sym(seat->keyboard_state, event->keycode);
 	if (state == WL_KEYBOARD_KEY_STATE_PRESSED) {
 		event->type = NWL_KEYBOARD_EVENT_KEYDOWN;
-		event->keysym = xkb_state_key_get_one_sym(seat->keyboard_state, event->keycode);
 		if (seat->keyboard_compose_state && seat->keyboard_compose_enabled) {
 			update_keyboard_event_compose(event);
 		} else {
