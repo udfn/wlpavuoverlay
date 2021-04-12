@@ -168,7 +168,7 @@ static void device_event_param(void *data, int seq, uint32_t id, uint32_t index,
 				struct spa_pod_prop *rprop;
 				struct spa_pod_object *objp = (struct spa_pod_object*)&prop->value;
 				// This sure doesn't feel like it's gonna cease to function soon
-				SPA_POD_OBJECT_FOREACH(objp,rprop) {
+				SPA_POD_OBJECT_FOREACH(objp, rprop) {
 					switch (rprop->key) {
 						case SPA_PROP_mute:
 							spa_pod_get_bool(&rprop->value, &mute);
@@ -178,6 +178,7 @@ static void device_event_param(void *data, int seq, uint32_t id, uint32_t index,
 							break;
 					}
 				}
+				break;
 			}
 			case SPA_PARAM_ROUTE_index:
 				spa_pod_get_int(&prop->value,&pod_index);
