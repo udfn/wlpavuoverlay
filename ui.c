@@ -375,6 +375,8 @@ void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_keyboard_
 				break;
 
 		}
+	} else if (event->type == NWL_KEYBOARD_EVENT_FOCUS) {
+		ui->input.num_shifts = 0;
 	}
 	nwl_surface_set_need_draw(surface, true);
 }
