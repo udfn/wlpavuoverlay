@@ -93,20 +93,18 @@ static const struct wl_output_listener output_listener = {
 
 static void handle_xdg_output_logical_position(void *data, struct zxdg_output_v1 *output,
 		int32_t x, int32_t y) {
-	// don't care
-	UNUSED(data);
+	struct nwl_output *noutput = data;
 	UNUSED(output);
-	UNUSED(x);
-	UNUSED(y);
+	noutput->x = x;
+	noutput->y = y;
 }
 
 static void handle_xdg_output_logical_size(void *data, struct zxdg_output_v1 *output,
 		int32_t width, int32_t height) {
-	// don't care
-	UNUSED(data);
+	struct nwl_output *noutput = data;
 	UNUSED(output);
-	UNUSED(width);
-	UNUSED(height);
+	noutput->width = width;
+	noutput->height = height;
 }
 
 static void handle_xdg_output_done(void *data, struct zxdg_output_v1 *output) {
@@ -320,6 +318,10 @@ char nwl_wayland_init(struct nwl_state *state) {
 	state->registry = wl_display_get_registry(state->display);
 	wl_registry_add_listener(state->registry, &reg_listener, state);
 	wl_display_roundtrip(state->display);
+	if (state->xdg_output_manager) {
+		// Extra roundtrip so output information is properly filled in
+		wl_display_roundtrip(state->display);
+	}
 	return 0;
 }
 

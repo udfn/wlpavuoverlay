@@ -21,6 +21,10 @@ struct nwl_output {
 	struct zxdg_output_v1 *xdg_output;
 	struct wl_list link;
 	int scale;
+	int32_t x;
+	int32_t y;
+	int32_t width;
+	int32_t height;
 	char *name;
 };
 // Need a better name for these
