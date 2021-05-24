@@ -3,6 +3,7 @@
 #include <wayland-cursor.h>
 #include <xkbcommon/xkbcommon.h>
 #include <stdio.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
@@ -284,12 +285,11 @@ static void nwl_wayland_poll_display(struct nwl_state *state, void *data) {
 }
 
 void nwl_wayland_run(struct nwl_state *state) {
-	wl_display_flush(state->display);
 	// Everything about this seems very flaky.. but it works!
 	while (state->run_with_zero_surfaces || state->num_surfaces) {
 		wl_display_flush(state->display);
 		int nfds = epoll_wait(state->poll->efd, state->poll->ev, state->poll->numfds, -1);
-		if (nfds == -1) {
+		if (nfds == -1 && errno != EINTR) {
 			perror("error while polling");
 			return;
 		}
