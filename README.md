@@ -19,6 +19,8 @@ There are currently hardcoded keyboard commands..
 * **m** - toggle mute on selected
 ## Compiling
 This is a simple Meson project, so the good old `meson build` `ninja -C build` is a good start.
+
+If you didn't do a recursive clone remember to `git submodule update --init` or something like that.
 ### Dependencies
 Many, but you probably already have most of these...
 * A working C compiler
@@ -45,7 +47,3 @@ Many, but you probably already have most of these...
 - [ ] Audio level meters, like `pavucontrol`
 - [x] PipeWire support
 - [ ] Advanced PipeWire features (graph view, video streams, etc..)
-## License?
-Unlicense. See the file `UNLICENSE` for the full text, or https://unlicense.org
-
-The XML protocol files in the `subprojects/nwl/protocol` directory have different licenses though.
