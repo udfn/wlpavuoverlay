@@ -377,6 +377,8 @@ void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_keyboard_
 		}
 	} else if (event->type == NWL_KEYBOARD_EVENT_FOCUS) {
 		ui->input.num_shifts = 0;
+		// This shouldn't be here, and maybe repeat should be on by default?
+		event->seat->keyboard_repeat_enabled = true;
 	}
 	nwl_surface_set_need_draw(surface, true);
 }
