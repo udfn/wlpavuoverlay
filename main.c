@@ -99,16 +99,18 @@ static void background_surface_destroy(struct nwl_surface *surf) {
 	free(surf->userdata);
 }
 
-static void set_surface_role(struct nwl_surface *surface, char layer) {
-	if (!layer || nwl_surface_role_layershell(surface, NULL, ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY)) {
-		if (nwl_surface_role_toplevel(surface)) {
-			return;
+static bool set_surface_role(struct nwl_surface *surface, char layer) {
+	if (!layer || !nwl_surface_role_layershell(surface, NULL, ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY)) {
+		if (!nwl_surface_role_toplevel(surface)) {
+			fprintf(stderr, "Unable to set surface role, is your compositor broken?\n");
+			return false;
 		}
 	}
 	else {
 		zwlr_layer_surface_v1_set_keyboard_interactivity(surface->wl.layer_surface, 1);
 		surface->states |= NWL_SURFACE_STATE_ACTIVE;
 	}
+	return true;
 }
 
 enum wlpavuo_surface_layer_mode {
@@ -128,7 +130,10 @@ static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_m
 	struct wlpavuo_state *wlpstate = state->userdata;
 	enum nwl_surface_renderer renderer = wlpstate->use_shm ? NWL_SURFACE_RENDER_SHM : NWL_SURFACE_RENDER_EGL;
 	struct nwl_surface *surf = nwl_surface_create(state,"WlPaVUOverlay", renderer);
-	set_surface_role(surf, layer != WLPAVUO_SURFACE_LAYER_MODE_XDGSHELL);
+	if (!set_surface_role(surf, layer != WLPAVUO_SURFACE_LAYER_MODE_XDGSHELL)) {
+		nwl_surface_destroy(surf);
+		return;
+	}
 	if (surf->wl.layer_surface) {
 		if (layer == WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELL) {
 			setup_wlpavuo_ui_surface(surf);
