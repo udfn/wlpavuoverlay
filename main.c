@@ -156,7 +156,7 @@ static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_m
 				surf->wl.viewport = wp_viewporter_get_viewport(state->viewporter, surf->wl.surface);
 			}
 			struct nwl_surface *subsurf = nwl_surface_create(state, "WlPaVUOverlay sub", renderer);
-			nwl_surface_role_subsurface(surf, subsurf);
+			nwl_surface_role_subsurface(subsurf, surf);
 			wl_subsurface_set_position(subsurf->wl.subsurface, 0,0);
 			nwl_surface_set_size(subsurf, 540, 540);
 			subsurf->states |= NWL_SURFACE_STATE_ACTIVE;
@@ -174,6 +174,7 @@ static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_m
 
 int main (int argc, char *argv[]) {
 	struct nwl_state state = {0};
+	state.xdg_app_id = "wlpavuoverlay";
 	struct wlpavuo_state wlpstate = {0};
 	if (nwl_wayland_init(&state)) {
 		fprintf(stderr,"failed to init, bailing!\n");
