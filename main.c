@@ -19,14 +19,20 @@
 #include "xdg-decoration-unstable-v1.h"
 #include "viewporter.h"
 
-static bool surface_render(struct nwl_surface *surf, cairo_surface_t *cairo_surface) {
+static void surface_render(struct nwl_surface *surf, cairo_surface_t *cairo_surface) {
 	cairo_t *cr = cairo_create(cairo_surface);
 	char ret = wlpavuo_ui_run(surf, cr);
-	if (surf->flags & NWL_SURFACE_FLAG_DESTROY) {
+	if (surf->states & NWL_SURFACE_STATE_DESTROY) {
 		ret = false;
 	}
 	cairo_destroy(cr);
-	return ret;
+	if (ret) {
+		nwl_surface_swapbuffers(surf);
+		if (surf->parent) {
+			wl_surface_damage_buffer(surf->parent->wl.surface, 0, 0, surf->parent->width, surf->parent->height);
+			wl_surface_commit(surf->parent->wl.surface);
+		}
+	}
 }
 
 struct bgstatus_t {
@@ -36,37 +42,36 @@ struct bgstatus_t {
 	struct nwl_surface *main_surface;
 };
 
-static bool background_surface_render(struct nwl_surface *surf, cairo_surface_t *cairo_surface) {
-	char ret = 0;
-	bool bgdrawn = false;
+static void background_surface_render(struct nwl_surface *surf, cairo_surface_t *cairo_surface) {
 	struct bgstatus_t *bgstatus = surf->userdata;
+	struct nwl_surface *subsurf = bgstatus->main_surface;
+	if (bgstatus->actual_height != surf->actual_height || bgstatus->actual_width != surf->actual_width) {
+		bgstatus->actual_width = surf->actual_width;
+		bgstatus->actual_height = surf->actual_height;
+		wl_subsurface_set_position(subsurf->role.subsurface.wl, (surf->actual_width/2)-(subsurf->width/2),
+			(surf->actual_height/2)-(subsurf->height/2));
+		wl_surface_commit(subsurf->wl.surface);
+	}
+	if (bgstatus->main_surface->scale != surf->scale) {
+		// Hack: subsurface is not getting output enter events
+		bgstatus->main_surface->scale = surf->scale;
+		bgstatus->main_surface->states |= NWL_SURFACE_STATE_NEEDS_APPLY_SIZE;
+		// Also have to rerender the background for things to work
+		bgstatus->bgrendered = false;
+	}
 	if (!bgstatus->bgrendered) {
 		cairo_t *cr = cairo_create(cairo_surface);
 		cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
-		cairo_rectangle(cr, 0,0,surf->width,surf->height);
+		cairo_rectangle(cr, 0, 0, surf->width*surf->scale, surf->height*surf->scale);
 		cairo_set_source_rgba(cr, 0., 0,0, 0.45);
 		cairo_fill(cr);
 		cairo_destroy(cr);
 		bgstatus->bgrendered = 1;
-		bgdrawn = true;
+		nwl_surface_swapbuffers(surf);
+		nwl_surface_set_need_draw(bgstatus->main_surface, true);
+		return;
 	}
-	struct nwl_surface *subsurf;
-	wl_list_for_each(subsurf, &surf->subsurfaces, sublink) {
-		if (subsurf->renderer.impl->render(subsurf)) {
-			nwl_surface_swapbuffers(subsurf);
-			ret = 1;
-		}
-		if (bgstatus->actual_height != surf->actual_height || bgstatus->actual_width != surf->actual_width) {
-			bgstatus->actual_width = surf->actual_width;
-			bgstatus->actual_height = surf->actual_height;
-			wl_subsurface_set_position(subsurf->wl.subsurface, (surf->actual_width/2)-(subsurf->width/2),
-				(surf->actual_height/2)-(subsurf->height/2));
-		}
-	}
-	if (ret) {
-		wl_surface_commit(surf->wl.surface);
-	}
-	return bgdrawn;
+	wl_surface_commit(surf->wl.surface);
 }
 
 static void background_surface_input_keyboard(struct nwl_surface *surf, struct nwl_keyboard_event *event) {
@@ -82,7 +87,7 @@ static void background_surface_input_pointer(struct nwl_surface *surf, struct nw
 
 static void background_surface_configure(struct nwl_surface *surf, uint32_t width, uint32_t height) {
 	if (surf->width != width || surf->height != height) {
-		if (nwl_surface_set_vp_destination(surf,width,height)) {
+		if (nwl_surface_set_vp_destination(surf, width, height)) {
 			surf->width = 1;
 			surf->height = 1;
 			return;
@@ -107,7 +112,7 @@ static bool set_surface_role(struct nwl_surface *surface, char layer) {
 		}
 	}
 	else {
-		zwlr_layer_surface_v1_set_keyboard_interactivity(surface->wl.layer_surface, 1);
+		zwlr_layer_surface_v1_set_keyboard_interactivity(surface->role.layer.wl, 1);
 		surface->states |= NWL_SURFACE_STATE_ACTIVE;
 	}
 	return true;
@@ -129,45 +134,42 @@ static void setup_wlpavuo_ui_surface(struct nwl_surface *surf) {
 static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_mode layer) {
 	struct wlpavuo_state *wlpstate = state->userdata;
 	enum nwl_surface_renderer renderer = wlpstate->use_shm ? NWL_SURFACE_RENDER_SHM : NWL_SURFACE_RENDER_EGL;
-	struct nwl_surface *surf = nwl_surface_create(state,"WlPaVUOverlay", renderer);
+	struct nwl_surface *surf = nwl_surface_create(state, "WlPaVUOverlay", renderer);
 	if (!set_surface_role(surf, layer != WLPAVUO_SURFACE_LAYER_MODE_XDGSHELL)) {
 		nwl_surface_destroy(surf);
 		return;
 	}
-	if (surf->wl.layer_surface) {
+	if (surf->role_id == NWL_SURFACE_ROLE_LAYER) {
 		if (layer == WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELL) {
 			setup_wlpavuo_ui_surface(surf);
-			nwl_surface_set_size(surf, 520, 540);
-			//surf->flags = surf->flags & ~WLPAVUO_SURFACE_FLAG_CSD;
+			nwl_surface_set_size(surf, 540, 560);
+			surf->states |= NWL_SURFACE_STATE_CSD;
 		} else {
-			surf->userdata = calloc(1,sizeof(struct bgstatus_t));
+			surf->userdata = calloc(1, sizeof(struct bgstatus_t));
 			surf->impl.destroy = background_surface_destroy;
 			surf->impl.input_pointer = background_surface_input_pointer;
 			surf->impl.input_keyboard = background_surface_input_keyboard;
 			surf->impl.configure = background_surface_configure;
 			nwl_surface_renderer_cairo(surf, background_surface_render);
 			struct bgstatus_t *bgs = surf->userdata;
-			zwlr_layer_surface_v1_set_anchor(surf->wl.layer_surface,
+			zwlr_layer_surface_v1_set_anchor(surf->role.layer.wl,
 				ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM|ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP|
 				ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT|ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
-			zwlr_layer_surface_v1_set_exclusive_zone(surf->wl.layer_surface, -1);
-			nwl_surface_set_size(surf, 0,0);
+			zwlr_layer_surface_v1_set_exclusive_zone(surf->role.layer.wl, -1);
+			nwl_surface_set_size(surf, 0, 0);
 			if (state->viewporter) {
 				surf->wl.viewport = wp_viewporter_get_viewport(state->viewporter, surf->wl.surface);
 			}
 			struct nwl_surface *subsurf = nwl_surface_create(state, "WlPaVUOverlay sub", renderer);
-			nwl_surface_role_subsurface(subsurf, surf);
-			wl_subsurface_set_position(subsurf->wl.subsurface, 0,0);
-			nwl_surface_set_size(subsurf, 540, 540);
-			subsurf->states |= NWL_SURFACE_STATE_ACTIVE;
-			subsurf->flags = subsurf->flags & ~NWL_SURFACE_FLAG_CSD;
-			bgs->main_surface = subsurf;
 			setup_wlpavuo_ui_surface(subsurf);
-			wl_surface_commit(subsurf->wl.surface);
+			nwl_surface_role_subsurface(subsurf, surf);
+			nwl_surface_set_size(subsurf, 540, 560);
+			subsurf->states |= NWL_SURFACE_STATE_ACTIVE;
+			bgs->main_surface = subsurf;
 		}
 	} else {
 		setup_wlpavuo_ui_surface(surf);
-		nwl_surface_set_size(surf, 520, 540);
+		nwl_surface_set_size(surf, 540, 560);
 	}
 	wl_surface_commit(surf->wl.surface);
 }

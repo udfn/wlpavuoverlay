@@ -8,8 +8,10 @@
 #include <stdlib.h>
 #include <cairo-gl.h>
 #include <cairo.h>
+#include <unistd.h>
 #include <xkbcommon/xkbcommon.h>
 #include <nwl/surface.h>
+#include <sys/eventfd.h>
 #include "ui.h"
 #include "nuklear.h"
 #include "xdg-shell.h"
@@ -46,6 +48,7 @@ struct wlpavuo_ui {
 	const struct wlpavuo_audio_impl *backend;
 	int num_items;
 	int scale;
+	int evfd; // eventfd used for redrawing
 };
 
 void cairo_set_nk_color(cairo_t *c, struct nk_color color) {
@@ -178,7 +181,7 @@ static void set_nk_color(struct nk_color *color,nk_byte r,nk_byte g, nk_byte b, 
 #define WINDOW_RESIZE_BORDER 4
 #define WINDOW_CORNER_RESIZE 25
 static void check_window_move(struct nwl_surface *surface, struct nk_context *ctx) {
-	if (!(surface->flags & NWL_SURFACE_FLAG_CSD)) {
+	if (!(surface->states & NWL_SURFACE_STATE_CSD)) {
 		return;
 	}
 	struct nk_window *mainwin = nk_window_find(ctx, "mainwin");
@@ -236,7 +239,7 @@ static void check_window_move(struct nwl_surface *surface, struct nk_context *ct
 		}
 		uint32_t serial = ui->input.pointer_serial;
 		if (edges) {
-			xdg_toplevel_resize(surface->wl.xdg_toplevel, ui->input.last_input->wl_seat,
+			xdg_toplevel_resize(surface->role.toplevel.wl, ui->input.last_input->wl_seat,
 				serial, edges);
 			return;
 		}
@@ -253,7 +256,7 @@ static void check_window_move(struct nwl_surface *surface, struct nk_context *ct
 		left_mouse_click_in_cursor = nk_input_has_mouse_click_down_in_rect(&ctx->input,
 			NK_BUTTON_LEFT, header, 1);
 		if (left_mouse_click_in_cursor) {
-			xdg_toplevel_move(surface->wl.xdg_toplevel, ui->input.last_input->wl_seat, serial);
+			xdg_toplevel_move(surface->role.toplevel.wl, ui->input.last_input->wl_seat, serial);
 		}
 	}
 
@@ -262,6 +265,8 @@ static void check_window_move(struct nwl_surface *surface, struct nk_context *ct
 void wlpavuo_ui_destroy(struct nwl_surface *surface) {
 	struct wlpavuo_ui *ui = surface->userdata;
 	ui->backend->uninit();
+	nwl_poll_del_fd(surface->state, ui->evfd);
+	close(ui->evfd);
 	free(ui->context);
 	free(ui->draw_last);
 	free(ui->draw_buf);
@@ -413,15 +418,22 @@ void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_pointer_ev
 	}
 	ui->input.pointer_serial = event->serial;
 	ui->input.last_input = event->seat;
-	nwl_surface_set_need_draw(surface,true);
+	nwl_surface_set_need_draw(surface, true);
+}
+
+static void rerender_from_event(struct nwl_state *state, void *data) {
+	struct nwl_surface *surf = data;
+	struct wlpavuo_ui *ui = surf->userdata;
+	eventfd_t val;
+	eventfd_read(ui->evfd, &val);
+	nwl_surface_set_need_draw(surf, true);
 }
 
 static void handle_audio_update(void *data) {
 	struct nwl_surface *surf = data;
-	// Shouldn't render on the audio thread!
-	nwl_surface_set_need_draw(surf,false);
-	// Is this safe? Probably not!
-	wl_display_flush(surf->state->display);
+	struct wlpavuo_ui *ui = surf->userdata;
+	// Tell the main thread to update..
+	eventfd_write(ui->evfd, 1);
 }
 
 char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
@@ -449,7 +461,9 @@ char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 		{
 			ui->backend = wlpavuo_audio_get_pa();
 		}
-		ui->backend->set_update_callback(handle_audio_update,surface);
+		ui->evfd = eventfd(0, 0);
+		nwl_poll_add_fd(surface->state, ui->evfd, rerender_from_event, surface);
+		ui->backend->set_update_callback(handle_audio_update, surface);
 	}
 	const struct wlpavuo_audio_impl *aimpl = ui->backend;
 	ui->font.userdata.ptr = cr;
@@ -472,8 +486,8 @@ char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 	aimpl->lock();
 	copy_wlpavuo_input_to_nk(ui, ctx);
 	int32_t scale = surface->scale;
-	nk_flags winflags = surface->flags & NWL_SURFACE_FLAG_CSD ? NK_WINDOW_TITLE|NK_WINDOW_BORDER|NK_WINDOW_CLOSABLE:
-		surface->wl.layer_surface || surface->wl.subsurface ? NK_WINDOW_BORDER : 0;
+	nk_flags winflags = surface->states & NWL_SURFACE_STATE_CSD ? NK_WINDOW_TITLE|NK_WINDOW_BORDER|NK_WINDOW_CLOSABLE:
+		surface->role_id == NWL_SURFACE_ROLE_LAYER || surface->role_id == NWL_SURFACE_ROLE_SUB ? NK_WINDOW_BORDER : 0;
 	int inset = winflags ? 1 : 0;
 	cairo_scale(cr, scale,scale);
 	nk_style_set_font(ctx, &ui->font);
