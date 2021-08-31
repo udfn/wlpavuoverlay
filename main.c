@@ -157,8 +157,8 @@ static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_m
 				ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT|ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
 			zwlr_layer_surface_v1_set_exclusive_zone(surf->role.layer.wl, -1);
 			nwl_surface_set_size(surf, 0, 0);
-			if (state->viewporter) {
-				surf->wl.viewport = wp_viewporter_get_viewport(state->viewporter, surf->wl.surface);
+			if (state->wl.viewporter) {
+				surf->wl.viewport = wp_viewporter_get_viewport(state->wl.viewporter, surf->wl.surface);
 			}
 			struct nwl_surface *subsurf = nwl_surface_create(state, "WlPaVUOverlay sub", renderer);
 			setup_wlpavuo_ui_surface(subsurf);
@@ -179,11 +179,11 @@ int main (int argc, char *argv[]) {
 	state.xdg_app_id = "wlpavuoverlay";
 	struct wlpavuo_state wlpstate = {0};
 	if (nwl_wayland_init(&state)) {
-		fprintf(stderr,"failed to init, bailing!\n");
+		fprintf(stderr, "failed to init, bailing!\n");
 		return 1;
 	}
 	state.userdata = &wlpstate;
-	if (state.compositor) {
+	if (state.wl.compositor) {
 		char mode = WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELL;
 		for (int i = 1; i < argc;i++) {
 			if (strcmp(argv[i], "dim") == 0) {
