@@ -16,7 +16,6 @@
 #include "ui.h"
 #include "wlr-layer-shell-unstable-v1.h"
 #include "xdg-shell.h"
-#include "xdg-decoration-unstable-v1.h"
 #include "viewporter.h"
 
 static void surface_render(struct nwl_surface *surf, cairo_surface_t *cairo_surface) {

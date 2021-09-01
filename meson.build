@@ -2,7 +2,7 @@ project('wlpavuoverlay', 'c',
 	default_options: [
 		'c_std=c11'
 	],
-	version: '0.1 pre-alpha prototype'
+	version: '0.2 pre-alpha'
 )
 # shouldn't these warnings be suppressed by setting the c_std to gnu?
 cc = meson.get_compiler('c')
@@ -16,18 +16,24 @@ xkbc = dependency('xkbcommon')
 pulseaudio = dependency('libpulse')
 pipewire = dependency('libpipewire-0.3',required:false)
 includes = include_directories(['include'])
-nwl = subproject('nwl')
-nwl_dep = nwl.get_variable('nwl_dep')
+nwlsub = subproject('nwl', required: false)
+if nwlsub.found()
+	nwl = nwlsub.get_variable('nwl_dep')
+else
+	nwl = dependency('nwl', required: true)
+endif
+subdir('protocol')
 srcfiles = [
 	'main.c',
-	'ui.c'
+	'ui.c',
+	wlprotos
 ]
 deps = [
 	wayland_client,
 	cairo,
 	egl,
 	xkbc,
-	nwl_dep
+	nwl
 ]
 if pipewire.found()
 	srcfiles += 'pipewire.c'
@@ -40,4 +46,4 @@ if pulseaudio.found()
 	add_project_arguments('-DHAVE_PULSEAUDIO=1',language:'c')
 endif
 # error if only one is found?
-executable('wlpavuoverlay',srcfiles,dependencies: deps, include_directories:includes,install:true)
+executable('wlpavuoverlay', srcfiles, dependencies: deps, include_directories:includes, install:true)

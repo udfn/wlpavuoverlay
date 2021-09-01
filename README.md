@@ -1,7 +1,7 @@
 # WlPaVUOverlay
 ![](screenshot.png)
 
-WlPaVUOverlay is a simple utility for quickly changing PulseAudio (and soon PipeWire) volume levels.
+WlPaVUOverlay is a simple utility for quickly changing PulseAudio (and PipeWire) volume levels.
 Made exclusively for Wayland compositors. Preferably those that support `wlr-layer-shell`.
 ## Warning!
 I'm doing this to learn, so the code is horrible in many ways. You probably shouldn't use this as a learning resource, unless it's to learn how not to do things.
@@ -21,6 +21,7 @@ There are currently hardcoded keyboard commands..
 This is a simple Meson project, so the good old `meson build` `ninja -C build` is a good start.
 
 If you didn't do a recursive clone remember to `git submodule update --init` or something like that.
+Or grab and install [nwl](https://github.com/udfn/nwl/) separately if you prefer. But that's not recommended.
 ### Dependencies
 Many, but you probably already have most of these...
 * A working C compiler
