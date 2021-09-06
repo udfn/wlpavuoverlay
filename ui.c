@@ -320,7 +320,7 @@ void do_keyboard_input(struct wlpavuo_ui *ui, struct nk_context *ctx, unsigned l
 	}
 }
 
-void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_keyboard_event *event) {
+void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_seat *seat, struct nwl_keyboard_event *event) {
 	struct wlpavuo_ui *ui = surface->userdata;
 	if (!ui) {
 		return;
@@ -383,12 +383,12 @@ void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_keyboard_
 	} else if (event->type == NWL_KEYBOARD_EVENT_FOCUS) {
 		ui->input.num_shifts = 0;
 		// This shouldn't be here, and maybe repeat should be on by default?
-		event->seat->keyboard_repeat_enabled = true;
+		seat->keyboard_repeat_enabled = true;
 	}
 	nwl_surface_set_need_draw(surface, true);
 }
 
-void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_pointer_event *event) {
+void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_seat *seat, struct nwl_pointer_event *event) {
 	struct wlpavuo_ui *ui = surface->userdata;
 	if (!ui) {
 		return;
@@ -417,7 +417,7 @@ void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_pointer_ev
 		ui->input.scroll_vert += wl_fixed_to_int(event->axis_vert);
 	}
 	ui->input.pointer_serial = event->serial;
-	ui->input.last_input = event->seat;
+	ui->input.last_input = seat;
 	nwl_surface_set_need_draw(surface, true);
 }
 

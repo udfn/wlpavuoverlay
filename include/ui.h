@@ -5,8 +5,8 @@ struct wlpavuo_state {
 	bool use_pipewire;
 	bool use_shm;
 };
-void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_pointer_event *event);
-void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_keyboard_event *event);
+void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_seat *seat, struct nwl_pointer_event *event);
+void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_seat *seat, struct nwl_keyboard_event *event);
 char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr);
 void wlpavuo_ui_destroy(struct nwl_surface *surface);
 

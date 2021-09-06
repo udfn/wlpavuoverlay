@@ -73,12 +73,12 @@ static void background_surface_render(struct nwl_surface *surf, cairo_surface_t 
 	wl_surface_commit(surf->wl.surface);
 }
 
-static void background_surface_input_keyboard(struct nwl_surface *surf, struct nwl_keyboard_event *event) {
+static void background_surface_input_keyboard(struct nwl_surface *surf, struct nwl_seat *seat, struct nwl_keyboard_event *event) {
 	struct bgstatus_t *bgstatus = surf->userdata;
-	bgstatus->main_surface->impl.input_keyboard(bgstatus->main_surface,event);
+	bgstatus->main_surface->impl.input_keyboard(bgstatus->main_surface, seat, event);
 }
 
-static void background_surface_input_pointer(struct nwl_surface *surf, struct nwl_pointer_event *event) {
+static void background_surface_input_pointer(struct nwl_surface *surf, struct nwl_seat *seat, struct nwl_pointer_event *event) {
 	if (event->changed & NWL_POINTER_EVENT_BUTTON && event->buttons & NWL_MOUSE_LEFT) {
 		nwl_surface_destroy_later(surf);
 	}
