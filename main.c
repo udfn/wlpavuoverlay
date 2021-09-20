@@ -123,8 +123,8 @@ enum wlpavuo_surface_layer_mode {
 	WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELLFULL,
 };
 
-static void setup_wlpavuo_ui_surface(struct nwl_surface *surf) {
-	nwl_surface_renderer_cairo(surf, surface_render);
+static void setup_wlpavuo_ui_surface(struct wlpavuo_state *wlpstate, struct nwl_surface *surf) {
+	nwl_surface_renderer_cairo(surf, !wlpstate->use_shm, surface_render);
 	surf->impl.destroy = wlpavuo_ui_destroy;
 	surf->impl.input_pointer = wlpavuo_ui_input_pointer;
 	surf->impl.input_keyboard = wlpavuo_ui_input_keyboard;
@@ -132,15 +132,14 @@ static void setup_wlpavuo_ui_surface(struct nwl_surface *surf) {
 
 static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_mode layer) {
 	struct wlpavuo_state *wlpstate = state->userdata;
-	enum nwl_surface_renderer renderer = wlpstate->use_shm ? NWL_SURFACE_RENDER_SHM : NWL_SURFACE_RENDER_EGL;
-	struct nwl_surface *surf = nwl_surface_create(state, "WlPaVUOverlay", renderer);
+	struct nwl_surface *surf = nwl_surface_create(state, "WlPaVUOverlay");
 	if (!set_surface_role(surf, layer != WLPAVUO_SURFACE_LAYER_MODE_XDGSHELL)) {
 		nwl_surface_destroy(surf);
 		return;
 	}
 	if (surf->role_id == NWL_SURFACE_ROLE_LAYER) {
 		if (layer == WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELL) {
-			setup_wlpavuo_ui_surface(surf);
+			setup_wlpavuo_ui_surface(wlpstate, surf);
 			nwl_surface_set_size(surf, 540, 560);
 			surf->states |= NWL_SURFACE_STATE_CSD;
 		} else {
@@ -149,7 +148,7 @@ static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_m
 			surf->impl.input_pointer = background_surface_input_pointer;
 			surf->impl.input_keyboard = background_surface_input_keyboard;
 			surf->impl.configure = background_surface_configure;
-			nwl_surface_renderer_cairo(surf, background_surface_render);
+			nwl_surface_renderer_cairo(surf, !wlpstate->use_shm, background_surface_render);
 			struct bgstatus_t *bgs = surf->userdata;
 			zwlr_layer_surface_v1_set_anchor(surf->role.layer.wl,
 				ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM|ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP|
@@ -159,15 +158,15 @@ static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_m
 			if (state->wl.viewporter) {
 				surf->wl.viewport = wp_viewporter_get_viewport(state->wl.viewporter, surf->wl.surface);
 			}
-			struct nwl_surface *subsurf = nwl_surface_create(state, "WlPaVUOverlay sub", renderer);
-			setup_wlpavuo_ui_surface(subsurf);
+			struct nwl_surface *subsurf = nwl_surface_create(state, "WlPaVUOverlay sub");
+			setup_wlpavuo_ui_surface(wlpstate, subsurf);
 			nwl_surface_role_subsurface(subsurf, surf);
 			nwl_surface_set_size(subsurf, 540, 560);
 			subsurf->states |= NWL_SURFACE_STATE_ACTIVE;
 			bgs->main_surface = subsurf;
 		}
 	} else {
-		setup_wlpavuo_ui_surface(surf);
+		setup_wlpavuo_ui_surface(wlpstate, surf);
 		nwl_surface_set_size(surf, 540, 560);
 	}
 	wl_surface_commit(surf->wl.surface);
