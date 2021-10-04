@@ -18,6 +18,12 @@
 #include "xdg-shell.h"
 #include "viewporter.h"
 
+enum wlpavuo_surface_layer_mode {
+	WLPAVUO_SURFACE_LAYER_MODE_XDGSHELL,
+	WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELL,
+	WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELLFULL,
+};
+
 static void surface_render(struct nwl_surface *surf, cairo_surface_t *cairo_surface) {
 	cairo_t *cr = cairo_create(cairo_surface);
 	char ret = wlpavuo_ui_run(surf, cr);
@@ -117,12 +123,6 @@ static bool set_surface_role(struct nwl_surface *surface, char layer) {
 	return true;
 }
 
-enum wlpavuo_surface_layer_mode {
-	WLPAVUO_SURFACE_LAYER_MODE_XDGSHELL,
-	WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELL,
-	WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELLFULL,
-};
-
 static void setup_wlpavuo_ui_surface(struct wlpavuo_state *wlpstate, struct nwl_surface *surf) {
 	nwl_surface_renderer_cairo(surf, !wlpstate->use_shm, surface_render);
 	surf->impl.destroy = wlpavuo_ui_destroy;
@@ -140,7 +140,7 @@ static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_m
 	if (surf->role_id == NWL_SURFACE_ROLE_LAYER) {
 		if (layer == WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELL) {
 			setup_wlpavuo_ui_surface(wlpstate, surf);
-			nwl_surface_set_size(surf, 540, 560);
+			nwl_surface_set_size(surf, wlpstate->width, wlpstate->height);
 			surf->states |= NWL_SURFACE_STATE_CSD;
 		} else {
 			surf->userdata = calloc(1, sizeof(struct bgstatus_t));
@@ -161,40 +161,69 @@ static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_m
 			struct nwl_surface *subsurf = nwl_surface_create(state, "WlPaVUOverlay sub");
 			setup_wlpavuo_ui_surface(wlpstate, subsurf);
 			nwl_surface_role_subsurface(subsurf, surf);
-			nwl_surface_set_size(subsurf, 540, 560);
+			nwl_surface_set_size(subsurf, wlpstate->width, wlpstate->height);
 			subsurf->states |= NWL_SURFACE_STATE_ACTIVE;
 			bgs->main_surface = subsurf;
 		}
 	} else {
 		setup_wlpavuo_ui_surface(wlpstate, surf);
-		nwl_surface_set_size(surf, 540, 560);
+		nwl_surface_set_size(surf, wlpstate->width, wlpstate->height);
 	}
 	wl_surface_commit(surf->wl.surface);
 }
 
 int main (int argc, char *argv[]) {
 	struct nwl_state state = {0};
+	struct wlpavuo_state wlpstate = {
+		.width = 620,
+		.height = 640,
+		.mode = WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELL
+	};
+	int opt;
+	while ((opt = getopt(argc, argv, "dxpsw:h:")) != -1) {
+		switch (opt) {
+			case 'd':
+				wlpstate.mode = WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELLFULL;
+				break;
+			case 'x':
+				wlpstate.mode = WLPAVUO_SURFACE_LAYER_MODE_XDGSHELL;
+				break;
+			case 'p': wlpstate.use_pipewire = true; break;
+			case 's': wlpstate.use_shm = true; break;
+			case 'w':;
+				int width = atoi(optarg);
+				if (width > 0)
+					wlpstate.width = width;
+				break;
+			case 'h':;
+				int height = atoi(optarg);
+				if (height > 0)
+					wlpstate.height = height;
+				break;
+		default:
+			break;
+		}
+	}
+
+	for (int i = optind; i < argc; i++) {
+		if (strcmp(argv[i], "dim") == 0) {
+			wlpstate.mode = WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELLFULL;
+		} else if (strcmp(argv[i], "xdg") == 0) {
+			wlpstate.mode = WLPAVUO_SURFACE_LAYER_MODE_XDGSHELL;
+		} else if (strcmp(argv[i], "pw") == 0) {
+			wlpstate.use_pipewire = true;
+		} else if (strcmp(argv[i], "shm") == 0) {
+			wlpstate.use_shm = true;
+		}
+	}
 	state.xdg_app_id = "wlpavuoverlay";
-	struct wlpavuo_state wlpstate = {0};
 	if (nwl_wayland_init(&state)) {
 		fprintf(stderr, "failed to init, bailing!\n");
 		return 1;
 	}
 	state.userdata = &wlpstate;
 	if (state.wl.compositor) {
-		char mode = WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELL;
-		for (int i = 1; i < argc;i++) {
-			if (strcmp(argv[i], "dim") == 0) {
-				mode = WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELLFULL;
-			} else if (strcmp(argv[i], "xdg") == 0) {
-				mode = WLPAVUO_SURFACE_LAYER_MODE_XDGSHELL;
-			} else if (strcmp(argv[i], "pw") == 0) {
-				wlpstate.use_pipewire = true;
-			} else if (strcmp(argv[i], "shm") == 0) {
-				wlpstate.use_shm = true;
-			}
-		}
-		create_surface(&state, mode);
+		create_surface(&state, wlpstate.mode);
 	}
 	nwl_wayland_run(&state);
 	nwl_wayland_uninit(&state);
