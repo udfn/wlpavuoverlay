@@ -32,7 +32,7 @@ static void surface_render(struct nwl_surface *surf, cairo_surface_t *cairo_surf
 	}
 	cairo_destroy(cr);
 	if (ret) {
-		nwl_surface_swapbuffers(surf);
+		nwl_surface_swapbuffers(surf, 0, 0);
 		if (surf->parent) {
 			wl_surface_damage_buffer(surf->parent->wl.surface, 0, 0, surf->parent->width, surf->parent->height);
 			wl_surface_commit(surf->parent->wl.surface);
@@ -72,7 +72,7 @@ static void background_surface_render(struct nwl_surface *surf, cairo_surface_t 
 		cairo_fill(cr);
 		cairo_destroy(cr);
 		bgstatus->bgrendered = 1;
-		nwl_surface_swapbuffers(surf);
+		nwl_surface_swapbuffers(surf, 0, 0);
 		nwl_surface_set_need_draw(bgstatus->main_surface, true);
 		return;
 	}
@@ -85,6 +85,7 @@ static void background_surface_input_keyboard(struct nwl_surface *surf, struct n
 }
 
 static void background_surface_input_pointer(struct nwl_surface *surf, struct nwl_seat *seat, struct nwl_pointer_event *event) {
+	UNUSED(seat);
 	if (event->changed & NWL_POINTER_EVENT_BUTTON && event->buttons & NWL_MOUSE_LEFT) {
 		nwl_surface_destroy_later(surf);
 	}
