@@ -50,11 +50,12 @@ struct bgstatus_t {
 static void background_surface_render(struct nwl_surface *surf, cairo_surface_t *cairo_surface) {
 	struct bgstatus_t *bgstatus = surf->userdata;
 	struct nwl_surface *subsurf = bgstatus->main_surface;
-	if (bgstatus->actual_height != surf->actual_height || bgstatus->actual_width != surf->actual_width) {
-		bgstatus->actual_width = surf->actual_width;
-		bgstatus->actual_height = surf->actual_height;
-		wl_subsurface_set_position(subsurf->role.subsurface.wl, (surf->actual_width/2)-(subsurf->width/2),
-			(surf->actual_height/2)-(subsurf->height/2));
+	if (bgstatus->actual_height != surf->desired_height ||
+			bgstatus->actual_width != surf->desired_height) {
+		bgstatus->actual_width = surf->desired_width;
+		bgstatus->actual_height = surf->desired_height;
+		wl_subsurface_set_position(subsurf->role.subsurface.wl, (surf->desired_width/2)-(subsurf->width/2),
+			(surf->desired_height/2)-(subsurf->height/2));
 		wl_surface_commit(subsurf->wl.surface);
 	}
 	if (bgstatus->main_surface->scale != surf->scale) {
@@ -67,13 +68,12 @@ static void background_surface_render(struct nwl_surface *surf, cairo_surface_t 
 	if (!bgstatus->bgrendered) {
 		cairo_t *cr = cairo_create(cairo_surface);
 		cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
-		cairo_rectangle(cr, 0, 0, surf->width*surf->scale, surf->height*surf->scale);
-		cairo_set_source_rgba(cr, 0., 0,0, 0.45);
-		cairo_fill(cr);
+		cairo_set_source_rgba(cr, 0, 0, 0, 0.45);
+		cairo_paint(cr);
 		cairo_destroy(cr);
 		bgstatus->bgrendered = 1;
-		nwl_surface_swapbuffers(surf, 0, 0);
 		nwl_surface_set_need_draw(bgstatus->main_surface, true);
+		nwl_surface_swapbuffers(surf, 0, 0);
 		return;
 	}
 	wl_surface_commit(surf->wl.surface);
@@ -94,6 +94,9 @@ static void background_surface_input_pointer(struct nwl_surface *surf, struct nw
 static void background_surface_configure(struct nwl_surface *surf, uint32_t width, uint32_t height) {
 	if (surf->width != width || surf->height != height) {
 		if (nwl_surface_set_vp_destination(surf, width, height)) {
+			// Er, abusing desired size for this? Ok then!
+			surf->desired_width = width;
+			surf->desired_height = height;
 			surf->width = 1;
 			surf->height = 1;
 			return;
@@ -101,8 +104,6 @@ static void background_surface_configure(struct nwl_surface *surf, uint32_t widt
 		// No viewport? Oh well..
 		surf->width = width;
 		surf->height = height;
-		surf->actual_height = height;
-		surf->actual_width = width;
 	}
 }
 

@@ -22,8 +22,7 @@ There are currently hardcoded keyboard commands..
 ## Compiling
 This is a simple Meson project, so the good old `meson build` `ninja -C build` is a good start.
 
-If you didn't do a recursive clone remember to `git submodule update --init` or something like that.
-Or grab and install [nwl](https://github.com/udfn/nwl/) separately if you prefer. But that's not recommended.
+This uses my own little nwl library. If you're just using Meson defaults it should automatically fetch it for you. If you prefer you can grab and install [nwl](https://github.com/udfn/nwl/) separately. But that's not recommended.
 ### Dependencies
 Many, but you probably already have most of these...
 * A working C compiler
