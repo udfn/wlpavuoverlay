@@ -259,7 +259,7 @@ void wlpavuo_pulse_set_sink_volume(struct wlpavuo_audio_sink *sink, uint32_t vol
 	pa_operation_unref(pa_context_set_sink_volume_by_index(pulse_state.context, sink->id, &vol, handle_pulse_event_success,NULL));
 }
 
-enum wlpavuo_audio_status wlpavuo_pulse_init() {
+static void wlpavuo_pulse_init() {
 	if (!pulse_state.context && pulse_state.status != WLPAVUO_AUDIO_STATUS_FAILED) {
 		wl_list_init(&pulse_state.clients);
 		wl_list_init(&pulse_state.sinks);
@@ -275,6 +275,9 @@ enum wlpavuo_audio_status wlpavuo_pulse_init() {
 		pa_context_connect(pulse_state.context, NULL, PA_CONTEXT_NOAUTOSPAWN, NULL);
 		pa_threaded_mainloop_start(pulse_state.mainloop);
 	}
+}
+
+enum wlpavuo_audio_status wlpavuo_pulse_get_status() {
 	return pulse_state.status;
 }
 
@@ -323,7 +326,7 @@ static const char* pulse_get_name() {
 
 static const struct wlpavuo_audio_impl pulse_impl = {
 	pulse_get_name,
-	wlpavuo_pulse_init,
+	wlpavuo_pulse_get_status,
 	wlpavuo_pulse_uninit,
 	wlpavuo_pulse_set_update_callback,
 	wlpavuo_pulse_lock,
@@ -333,9 +336,12 @@ static const struct wlpavuo_audio_impl pulse_impl = {
 	wlpavuo_pulse_set_sink_volume,
 	wlpavuo_pulse_set_sink_mute,
 	wlpavuo_pulse_get_clients,
-	wlpavuo_pulse_get_sinks
+	wlpavuo_pulse_get_sinks,
+	NULL,
+	NULL
 };
 
 const struct wlpavuo_audio_impl* wlpavuo_audio_get_pa() {
+	wlpavuo_pulse_init();
 	return &pulse_impl;
 }

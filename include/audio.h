@@ -9,7 +9,6 @@ enum wlpavuo_audio_status {
 };
 enum wlpavuo_audio_info_flags {
 	WLPAVUO_AUDIO_MUTED = 1 << 0,
-	WLPAVUO_AUDIO_STREAM_INPUT = 1 << 1,
 };
 
 struct wlpavuo_audio_client_stream {
@@ -55,6 +54,8 @@ struct wlpavuo_audio_impl {
 	void (*set_sink_mute)(struct wlpavuo_audio_sink *sink, char mute);
 	struct wl_list*(*get_clients)(); // wlpavuo_audio_client
 	struct wl_list*(*get_sinks)(); // wlpavuo_audio_sink
+	int (*get_fd)();
+	void (*iterate)();
 };
 #ifdef HAVE_PULSEAUDIO
 const struct wlpavuo_audio_impl* wlpavuo_audio_get_pa();

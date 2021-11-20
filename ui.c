@@ -264,9 +264,13 @@ static void check_window_move(struct nwl_surface *surface, struct nk_context *ct
 
 void wlpavuo_ui_destroy(struct nwl_surface *surface) {
 	struct wlpavuo_ui *ui = surface->userdata;
+	if (ui->backend->iterate) {
+		nwl_poll_del_fd(surface->state, ui->backend->get_fd());
+	} else {
+		nwl_poll_del_fd(surface->state, ui->evfd);
+		close(ui->evfd);
+	}
 	ui->backend->uninit();
-	nwl_poll_del_fd(surface->state, ui->evfd);
-	close(ui->evfd);
 	free(ui->context);
 	free(ui->draw_last);
 	free(ui->draw_buf);
@@ -422,11 +426,17 @@ void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_seat *seat
 }
 
 static void rerender_from_event(struct nwl_state *state, void *data) {
+	UNUSED(state);
 	struct nwl_surface *surf = data;
 	struct wlpavuo_ui *ui = surf->userdata;
 	eventfd_t val;
 	eventfd_read(ui->evfd, &val);
-	nwl_surface_set_need_draw(surf, true);
+	nwl_surface_set_need_draw(surf, false);
+}
+
+static void handle_audio_update_singlethread(void *data) {
+	struct nwl_surface *surf = data;
+	nwl_surface_set_need_draw(surf, false);
 }
 
 static void handle_audio_update(void *data) {
@@ -461,9 +471,14 @@ char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 		{
 			ui->backend = wlpavuo_audio_get_pa();
 		}
-		ui->evfd = eventfd(0, 0);
-		nwl_poll_add_fd(surface->state, ui->evfd, rerender_from_event, surface);
-		ui->backend->set_update_callback(handle_audio_update, surface);
+		if (ui->backend->iterate) {
+			nwl_poll_add_fd(surface->state, ui->backend->get_fd(), ui->backend->iterate, NULL);
+			ui->backend->set_update_callback(handle_audio_update_singlethread, surface);
+		} else {
+			ui->evfd = eventfd(0, 0);
+			nwl_poll_add_fd(surface->state, ui->evfd, rerender_from_event, surface);
+			ui->backend->set_update_callback(handle_audio_update, surface);
+		}
 	}
 	const struct wlpavuo_audio_impl *aimpl = ui->backend;
 	ui->font.userdata.ptr = cr;
