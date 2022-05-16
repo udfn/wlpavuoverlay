@@ -520,7 +520,7 @@ char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 			snprintf(buf,255,"Failed connecting to %s :(", aimpl->get_name());
 			nk_label(ctx,buf, NK_TEXT_ALIGN_CENTERED);
 			if (nk_button_label(ctx, "Quit")) {
-				nwl_surface_destroy_later(surface);
+				surface->state->num_surfaces = 0;
 			}
 		} else if (status == WLPAVUO_AUDIO_STATUS_READY) {
 			struct wl_list *sinks = aimpl->get_sinks();
