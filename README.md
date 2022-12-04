@@ -1,5 +1,5 @@
 # WlPaVUOverlay
-![](screenshot.png)
+![](https://udfn.github.io/wlpavuo/screenshot.png)
 
 WlPaVUOverlay is a simple utility for quickly changing PulseAudio (and PipeWire) volume levels.
 Made exclusively for Wayland compositors. Preferably those that support `wlr-layer-shell`.
