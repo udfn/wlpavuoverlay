@@ -609,8 +609,7 @@ char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 		ui->height = surface->height;
 		cairo_set_source_rgba(cr, 0,0,0,0);
 		cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
-		cairo_rectangle(cr, 0,0,surface->width,surface->height);
-		cairo_fill(cr);
+		cairo_paint(cr);
 		cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
 		wlpavuo_ui_render(ctx, cr);
 		nk_clear(ctx);
