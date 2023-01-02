@@ -10,6 +10,7 @@ struct wlpavuo_state {
 	bool stdin_input;
 	uint32_t width;
 	uint32_t height;
+	bool dynamic_height;
 	char mode;
 	uint32_t anchor;
 };

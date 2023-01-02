@@ -480,17 +480,42 @@ void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_seat *seat
 	nwl_surface_set_need_draw(surface, true);
 }
 
+static void maybe_update_size(struct nwl_surface *surf) {
+	struct wlpavuo_ui *ui = surf->userdata;
+	struct wlpavuo_state *state = surf->state->userdata;
+	if (state->dynamic_height) {
+		uint32_t new_height = 140;
+		if (surf->states & NWL_SURFACE_STATE_CSD) {
+			new_height += 40;
+		}
+		struct wlpavuo_audio_client *client;
+		wl_list_for_each(client, ui->backend->get_clients(), link) {
+			if (client->streams_count) {
+				new_height += 21 + (client->streams_count * 63);
+			}
+		}
+		if (new_height > state->height) {
+			new_height = state->height;
+		}
+		if (new_height > surf->desired_height) {
+			nwl_surface_set_size(surf, surf->desired_width, new_height);
+		}
+	}
+}
+
 static void rerender_from_event(struct nwl_state *state, void *data) {
 	UNUSED(state);
 	struct nwl_surface *surf = data;
 	struct wlpavuo_ui *ui = surf->userdata;
 	eventfd_t val;
 	eventfd_read(ui->evfd, &val);
+	maybe_update_size(surf);
 	nwl_surface_set_need_draw(surf, false);
 }
 
 static void handle_audio_update_singlethread(void *data) {
 	struct nwl_surface *surf = data;
+	maybe_update_size(surf);
 	nwl_surface_set_need_draw(surf, false);
 }
 

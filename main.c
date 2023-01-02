@@ -51,12 +51,13 @@ struct bgstatus_t {
 static void background_surface_update_sub(struct nwl_surface *surf) {
 	struct bgstatus_t *bgstatus = surf->userdata;
 	struct nwl_surface *subsurf = bgstatus->main_surface;
+	struct wlpavuo_state *wlpstate = surf->state->userdata;
 	if (bgstatus->actual_height != surf->desired_height ||
 			bgstatus->actual_width != surf->desired_height) {
 		bgstatus->actual_width = surf->desired_width;
 		bgstatus->actual_height = surf->desired_height;
 		wl_subsurface_set_position(subsurf->role.subsurface.wl, (surf->desired_width/2)-(subsurf->width/2),
-			(surf->desired_height/2)-(subsurf->height/2));
+			(surf->desired_height/2)-(wlpstate->height/2));
 		wl_surface_commit(subsurf->wl.surface);
 	}
 	if (bgstatus->main_surface->scale != surf->scale) {
@@ -189,9 +190,11 @@ static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_m
 		return;
 	}
 	if (surf->role_id == NWL_SURFACE_ROLE_LAYER) {
+		uint32_t base_height = 140;
 		if (!wlpstate->no_seat) {
 			zwlr_layer_surface_v1_set_keyboard_interactivity(surf->role.layer.wl, 1);
 			surf->states |= NWL_SURFACE_STATE_CSD;
+			base_height += 40;
 		} else {
 			struct wl_region *region = wl_compositor_create_region(state->wl.compositor);
 			wl_surface_set_input_region(surf->wl.surface, region);
@@ -199,7 +202,7 @@ static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_m
 		}
 		if (layer == WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELL) {
 			setup_wlpavuo_ui_surface(wlpstate, surf);
-			nwl_surface_set_size(surf, wlpstate->width, wlpstate->height);
+			nwl_surface_set_size(surf, wlpstate->width, wlpstate->dynamic_height ? base_height : wlpstate->height);
 			zwlr_layer_surface_v1_set_anchor(surf->role.layer.wl, wlpstate->anchor);
 		} else {
 			surf->userdata = calloc(1, sizeof(struct bgstatus_t));
@@ -226,7 +229,7 @@ static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_m
 			struct nwl_surface *subsurf = nwl_surface_create(state, "WlPaVUOverlay sub");
 			setup_wlpavuo_ui_surface(wlpstate, subsurf);
 			nwl_surface_role_subsurface(subsurf, surf);
-			nwl_surface_set_size(subsurf, wlpstate->width, wlpstate->height);
+			nwl_surface_set_size(subsurf, wlpstate->width, wlpstate->dynamic_height ? base_height : wlpstate->height);
 			subsurf->states |= NWL_SURFACE_STATE_ACTIVE;
 			bgs->main_surface = subsurf;
 		}
@@ -258,7 +261,7 @@ int main (int argc, char *argv[]) {
 		.userdata = &wlpstate,
 	};
 	int opt;
-	while ((opt = getopt(argc, argv, "dxpsISw:h:BTLR")) != -1) {
+	while ((opt = getopt(argc, argv, "dxpsISw:h:BTLRH")) != -1) {
 		switch (opt) {
 			case 'd':
 				wlpstate.mode = WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELLFULL;
@@ -277,6 +280,9 @@ int main (int argc, char *argv[]) {
 				int height = atoi(optarg);
 				if (height > 0)
 					wlpstate.height = height;
+				break;
+			case 'H':
+				wlpstate.dynamic_height = true;
 				break;
 			case 'S':
 				wlpstate.no_seat = true;
