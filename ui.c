@@ -44,6 +44,7 @@ struct wlpavuo_ui {
 		char mute_selected;
 		char scroll_to_selected;
 		char num_shifts;
+		char adjusting_volume;
 	} input;
 	const struct wlpavuo_audio_impl *backend;
 	int num_items;
@@ -298,8 +299,18 @@ void do_volume_control(struct nwl_surface *surface, struct nk_context *ctx,
 }
 
 void do_keyboard_input(struct wlpavuo_ui *ui, struct nk_context *ctx, unsigned long *volume, int *mute, int *scroll) {
-	set_nk_color(&ctx->style.progress.normal.data.color,37,57,86,255);
-	set_nk_color(&ctx->style.progress.hover.data.color,37,57,86,255);
+	set_nk_color(&ctx->style.progress.normal.data.color, 37, 57, 86, 255);
+	set_nk_color(&ctx->style.progress.hover.data.color, 52, 72, 101, 255);
+	set_nk_color(&ctx->style.progress.active.data.color, 52, 72, 101, 255);
+	if (ui->input.adjusting_volume) {
+		set_nk_color(&ctx->style.progress.cursor_normal.data.color, 140, 160, 180, 240);
+		set_nk_color(&ctx->style.progress.cursor_hover.data.color, 165, 185, 205, 240);
+		set_nk_color(&ctx->style.progress.cursor_active.data.color, 195, 210, 230, 240);
+	} else {
+		set_nk_color(&ctx->style.progress.cursor_normal.data.color, 110, 110, 110, 195);
+		set_nk_color(&ctx->style.progress.cursor_hover.data.color, 135, 135, 135, 195);
+		set_nk_color(&ctx->style.progress.cursor_active.data.color, 160, 160, 160, 195);
+	}
 	if (((long)*volume + ui->input.adjust_vol) < 0) {
 		*volume = 0;
 	} else {
@@ -322,6 +333,56 @@ void do_keyboard_input(struct wlpavuo_ui *ui, struct nk_context *ctx, unsigned l
 		}
 		ui->input.scroll_to_selected = 0;
 	}
+}
+
+static void ui_select_item(struct wlpavuo_ui *ui, int dir) {
+	int new_pos = ui->input.selected += dir;
+	if (new_pos < 0) {
+		new_pos = ui->num_items-1;
+	} else if (new_pos > ui->num_items-1) {
+		new_pos = 0;
+	}
+	ui->input.selected = new_pos;
+	ui->input.scroll_to_selected = 1;
+}
+
+void wlpavuo_ui_input_stdin(struct nwl_state *state, void *data) {
+	struct nwl_surface *surface = data;
+	struct wlpavuo_ui *ui = surface->userdata;
+	if (!ui) {
+		return;
+	}
+	unsigned char buf[32];
+	size_t read_amt = read(0, buf, 32);
+	for (int i = 0; i < read_amt; i++) {
+		char c = buf[i];
+		switch (c) {
+			case 's':
+				ui->input.adjusting_volume = !ui->input.adjusting_volume;
+				break;
+			case 'u':
+				if (ui->input.adjusting_volume) {
+					ui->input.adjust_vol += 2500;
+				} else {
+					ui_select_item(ui, -1);
+				}
+				break;
+			case 'd':
+				if (ui->input.adjusting_volume) {
+					ui->input.adjust_vol -= 2500;
+				} else {
+					ui_select_item(ui, 1);
+				}
+				break;
+			case 'm':
+				ui->input.mute_selected = 1;
+				break;
+			case 'q':
+				surface->state->num_surfaces = 0;
+				break;
+		}
+	}
+	nwl_surface_set_need_draw(surface, true);
 }
 
 void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_seat *seat, struct nwl_keyboard_event *event) {
@@ -347,18 +408,12 @@ void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_seat *sea
 			case XKB_KEY_j:
 			case XKB_KEY_J:
 			case XKB_KEY_Down:
-				if (ui->num_items-1 > ui->input.selected) {
-					ui->input.selected++;
-				}
-				ui->input.scroll_to_selected = 1;
+				ui_select_item(ui, 1);
 				break;
 			case XKB_KEY_k:
 			case XKB_KEY_K:
 			case XKB_KEY_Up:
-				if (ui->input.selected > 0) {
-					ui->input.selected--;
-				}
-				ui->input.scroll_to_selected = 1;
+				ui_select_item(ui, -1);
 				break;
 			case XKB_KEY_m:
 			case XKB_KEY_M:
@@ -444,6 +499,15 @@ static void handle_audio_update(void *data) {
 	struct wlpavuo_ui *ui = surf->userdata;
 	// Tell the main thread to update..
 	eventfd_write(ui->evfd, 1);
+}
+
+static void set_progress_unselected_color(struct nk_context *ctx) {
+	set_nk_color(&ctx->style.progress.normal.data.color, 35, 35, 35, 255);
+	set_nk_color(&ctx->style.progress.hover.data.color, 45, 45, 45, 255);
+	set_nk_color(&ctx->style.progress.active.data.color, 45, 45, 45, 255);
+	set_nk_color(&ctx->style.progress.cursor_normal.data.color, 110, 110, 110, 195);
+	set_nk_color(&ctx->style.progress.cursor_hover.data.color, 135, 135, 135, 195);
+	set_nk_color(&ctx->style.progress.cursor_active.data.color, 160, 160, 160, 195);
 }
 
 char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
@@ -534,8 +598,7 @@ char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 					do_keyboard_input(ui, ctx, &voltmp, &mutetmp, &scroll_to);
 				}
 				else {
-					set_nk_color(&ctx->style.progress.normal.data.color, 30,30,30,255);
-					set_nk_color(&ctx->style.progress.hover.data.color, 30,30,30,255);
+					set_progress_unselected_color(ctx);
 				}
 				snprintf(buf,255,"%s", sink->name);
 				do_volume_control(surface, ctx, &ui->font, &ui->fontsmol, buf, &voltmp, &mutetmp);
@@ -567,12 +630,10 @@ char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 					unsigned long voltmp = stream->volume;
 					if (counter == ui->input.selected) {
 						do_keyboard_input(ui, ctx, &voltmp, &mutetmp, &scroll_to);
+					} else {
+						set_progress_unselected_color(ctx);
 					}
-					else {
-						set_nk_color(&ctx->style.progress.normal.data.color, 30,30,30,255);
-						set_nk_color(&ctx->style.progress.hover.data.color, 30,30,30,255);
-					}
-					snprintf(buf,255,"%s", stream->name);
+					snprintf(buf, 255, "%s", stream->name);
 					do_volume_control(surface, ctx, &ui->fontsmol, &ui->fontsmol, buf, &voltmp, &mutetmp);
 					if (mutetmp != (stream->flags & WLPAVUO_AUDIO_MUTED)) {
 						aimpl->set_stream_mute(stream, mutetmp ? 1 : 0);

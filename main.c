@@ -104,7 +104,6 @@ static void sp_renderer_destroy(struct nwl_surface *surface) {
 	if (surface->render.data) {
 		wl_buffer_destroy(surface->render.data);
 	}
-	return;
 }
 
 static void sp_renderer_swapbuffers(struct nwl_surface *surface, int32_t x, int32_t y) {
@@ -165,7 +164,6 @@ static bool set_surface_role(struct nwl_surface *surface, char layer) {
 		}
 	}
 	else {
-		zwlr_layer_surface_v1_set_keyboard_interactivity(surface->role.layer.wl, 1);
 		surface->states |= NWL_SURFACE_STATE_ACTIVE;
 	}
 	return true;
@@ -174,8 +172,13 @@ static bool set_surface_role(struct nwl_surface *surface, char layer) {
 static void setup_wlpavuo_ui_surface(struct wlpavuo_state *wlpstate, struct nwl_surface *surf) {
 	nwl_surface_renderer_cairo(surf, !wlpstate->use_shm, surface_render);
 	surf->impl.destroy = wlpavuo_ui_destroy;
-	surf->impl.input_pointer = wlpavuo_ui_input_pointer;
-	surf->impl.input_keyboard = wlpavuo_ui_input_keyboard;
+	if (!wlpstate->no_seat) {
+		surf->impl.input_pointer = wlpavuo_ui_input_pointer;
+		surf->impl.input_keyboard = wlpavuo_ui_input_keyboard;
+	}
+	if (wlpstate->stdin_input) {
+		nwl_poll_add_fd(surf->state, 0, wlpavuo_ui_input_stdin, surf);
+	}
 }
 
 static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_mode layer) {
@@ -186,15 +189,25 @@ static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_m
 		return;
 	}
 	if (surf->role_id == NWL_SURFACE_ROLE_LAYER) {
+		if (!wlpstate->no_seat) {
+			zwlr_layer_surface_v1_set_keyboard_interactivity(surf->role.layer.wl, 1);
+			surf->states |= NWL_SURFACE_STATE_CSD;
+		} else {
+			struct wl_region *region = wl_compositor_create_region(state->wl.compositor);
+			wl_surface_set_input_region(surf->wl.surface, region);
+			wl_region_destroy(region);
+		}
 		if (layer == WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELL) {
 			setup_wlpavuo_ui_surface(wlpstate, surf);
 			nwl_surface_set_size(surf, wlpstate->width, wlpstate->height);
-			surf->states |= NWL_SURFACE_STATE_CSD;
+			zwlr_layer_surface_v1_set_anchor(surf->role.layer.wl, wlpstate->anchor);
 		} else {
 			surf->userdata = calloc(1, sizeof(struct bgstatus_t));
 			surf->impl.destroy = background_surface_destroy;
-			surf->impl.input_pointer = background_surface_input_pointer;
-			surf->impl.input_keyboard = background_surface_input_keyboard;
+			if (!wlpstate->no_seat) {
+				surf->impl.input_pointer = background_surface_input_pointer;
+				surf->impl.input_keyboard = background_surface_input_keyboard;
+			}
 			surf->impl.configure = background_surface_configure;
 			if (wlpstate->sp_buffer_manager) {
 				surf->render.impl = &background_surface_sp_renderer_impl;
@@ -237,15 +250,15 @@ int main (int argc, char *argv[]) {
 	struct wlpavuo_state wlpstate = {
 		.width = 620,
 		.height = 640,
-		.mode = WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELL
+		.mode = WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELL,
 	};
 	struct nwl_state state = {
 		.xdg_app_id = "wlpavuoverlay",
 		.events.global_add = handle_global,
-		.userdata = &wlpstate
+		.userdata = &wlpstate,
 	};
 	int opt;
-	while ((opt = getopt(argc, argv, "dxpsw:h:")) != -1) {
+	while ((opt = getopt(argc, argv, "dxpsISw:h:BTLR")) != -1) {
 		switch (opt) {
 			case 'd':
 				wlpstate.mode = WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELLFULL;
@@ -264,6 +277,24 @@ int main (int argc, char *argv[]) {
 				int height = atoi(optarg);
 				if (height > 0)
 					wlpstate.height = height;
+				break;
+			case 'S':
+				wlpstate.no_seat = true;
+				break;
+			case 'I':
+				wlpstate.stdin_input = true;
+				break;
+			case 'B':
+				wlpstate.anchor |= ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM;
+				break;
+			case 'T':
+				wlpstate.anchor |= ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP;
+				break;
+			case 'L':
+				wlpstate.anchor |= ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT;
+				break;
+			case 'R':
+				wlpstate.anchor |= ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT;
 				break;
 		default:
 			break;
@@ -289,6 +320,9 @@ int main (int argc, char *argv[]) {
 		create_surface(&state, wlpstate.mode);
 	}
 	nwl_wayland_run(&state);
+	if (wlpstate.stdin_input) {
+		nwl_poll_del_fd(&state, 0);
+	}
 	if (wlpstate.sp_buffer_manager) {
 		wp_single_pixel_buffer_manager_v1_destroy(wlpstate.sp_buffer_manager);
 	}
