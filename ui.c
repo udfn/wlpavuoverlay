@@ -374,6 +374,12 @@ void wlpavuo_ui_input_stdin(struct nwl_state *state, void *data) {
 					ui_select_item(ui, 1);
 				}
 				break;
+			case 'j':
+				ui_select_item(ui, 1);
+				break;
+			case 'k':
+				ui_select_item(ui, -1);
+				break;
 			case 'm':
 				ui->input.mute_selected = 1;
 				break;

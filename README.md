@@ -17,7 +17,7 @@ You can add arguments to change the behaviour.
 * `-S` - Makes the surface not receive any Wayland seat input. Intended for use with `-I`.
 * `-B`, `-T`, `-L`, `-R` - If not in "fullscreen" mode, anchor to the bottom, top, left and/or right.
 * `-H` - Dynamically increase the surface height as needed up to the limit specified by `-h`.
-* `-I` - Control with input from stdin. Write `u` or `d` to move up or down, `s` to toggle volume adjustment, `m` to toggle mute and `q` to quit.
+* `-I` - Control with input from stdin. Write `u` or `d` to move up and down or adjust volume, `s` to toggle whether `u` and `d` adjust volume or selection, `j` and `k` always moves up and down, `m` to toggle mute and `q` to quit.
 
 There are currently hardcoded keyboard commands..
 * **j🠯 k🠭** - move down / up
