@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <xkbcommon/xkbcommon.h>
 #include <nwl/surface.h>
+#include <nwl/seat.h>
 #include <sys/eventfd.h>
 #include "ui.h"
 #include "nuklear.h"
