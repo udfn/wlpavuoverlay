@@ -96,7 +96,7 @@ static void node_event_info(void *data, const struct pw_node_info *info) {
 	pw_node_subscribe_params((struct pw_node*)global->proxy,&id,1);
 }
 
-static void fire_pipewire_callback() {
+static void fire_pipewire_callback(void) {
 	if (pw_state.status != WLPAVUO_AUDIO_STATUS_CONNECTING) {
 		pw_state.update_cb(pw_state.cb_data);
 	}
@@ -407,11 +407,11 @@ static const struct pw_core_events core_events = {
 	.done = core_event_done,
 };
 
-static const char* pipewire_get_name() {
+static const char* pipewire_get_name(void) {
 	return "PipeWire";
 }
 
-static void pipewire_init() {
+static void pipewire_init(void) {
 	if (!pw_state.loop) {
 		wl_list_init(&pw_state.sinks);
 		wl_list_init(&pw_state.clients);
@@ -430,11 +430,11 @@ static void pipewire_init() {
 	}
 }
 
-static enum wlpavuo_audio_status pipewire_get_status() {
+static enum wlpavuo_audio_status pipewire_get_status(void) {
 	return pw_state.status;
 }
 
-static void pipewire_uninit() {
+static void pipewire_uninit(void) {
 	struct pipewire_global *glob;
 	struct pipewire_global *globb;
 	wl_list_for_each_safe(glob, globb, &pw_state.globals, link) {
@@ -452,11 +452,11 @@ static void pipewire_set_update_callback(wlpavuo_audio_update_cb_t cb, void *dat
 	return;
 }
 
-static void pipewire_lock() {
+static void pipewire_lock(void) {
 	return;
 }
 
-static void pipewire_unlock() {
+static void pipewire_unlock(void) {
 	return;
 }
 
@@ -560,22 +560,22 @@ static void pipewire_set_sink_mute(struct wlpavuo_audio_sink *sink, char mute) {
 	}
 }
 
-static struct wl_list* pipewire_get_clients() {
+static struct wl_list* pipewire_get_clients(void) {
 	return &pw_state.clients;
 }
 
-static struct wl_list* pipewire_get_sinks() {
+static struct wl_list* pipewire_get_sinks(void) {
 	return &pw_state.sinks;
 }
 
-static int pipewire_get_fd() {
+static int pipewire_get_fd(void) {
 	if (pw_state.loop) {
 		return pw_loop_get_fd(pw_main_loop_get_loop(pw_state.loop));
 	}
 	return 0;
 }
 
-static void pipewire_iterate() {
+static void pipewire_iterate(void) {
 	if (pw_state.loop) {
 		pw_loop_iterate(pw_main_loop_get_loop(pw_state.loop), -1);
 	}
@@ -598,7 +598,7 @@ static const struct wlpavuo_audio_impl pw_impl = {
 	pipewire_iterate
 };
 
-const struct wlpavuo_audio_impl* wlpavuo_audio_get_pw() {
+const struct wlpavuo_audio_impl* wlpavuo_audio_get_pw(void) {
 	pipewire_init();
 	return &pw_impl;
 }

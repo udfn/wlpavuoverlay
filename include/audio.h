@@ -42,26 +42,26 @@ struct wlpavuo_audio_sink {
 typedef void (*wlpavuo_audio_update_cb_t)(void *data);
 
 struct wlpavuo_audio_impl {
-	const char* (*get_name)();
-	enum wlpavuo_audio_status (*init)();
-	void (*uninit)();
+	const char* (*get_name)(void);
+	enum wlpavuo_audio_status (*init)(void);
+	void (*uninit)(void);
 	void (*set_update_callback)(wlpavuo_audio_update_cb_t cb, void *data);
-	void (*lock)();
-	void (*unlock)();
+	void (*lock)(void);
+	void (*unlock)(void);
 	void (*set_stream_volume)(struct wlpavuo_audio_client_stream *stream, uint32_t vol);
 	void (*set_stream_mute)(struct wlpavuo_audio_client_stream *stream, char mute);
 	void (*set_sink_volume)(struct wlpavuo_audio_sink *sink, uint32_t vol);
 	void (*set_sink_mute)(struct wlpavuo_audio_sink *sink, char mute);
-	struct wl_list*(*get_clients)(); // wlpavuo_audio_client
-	struct wl_list*(*get_sinks)(); // wlpavuo_audio_sink
-	int (*get_fd)();
-	void (*iterate)();
+	struct wl_list*(*get_clients)(void); // wlpavuo_audio_client
+	struct wl_list*(*get_sinks)(void); // wlpavuo_audio_sink
+	int (*get_fd)(void);
+	void (*iterate)(void);
 };
 #ifdef HAVE_PULSEAUDIO
-const struct wlpavuo_audio_impl* wlpavuo_audio_get_pa();
+const struct wlpavuo_audio_impl* wlpavuo_audio_get_pa(void);
 #endif
 #ifdef HAVE_PIPEWIRE
 // But PipeWire isn't only audio..
-const struct wlpavuo_audio_impl* wlpavuo_audio_get_pw();
+const struct wlpavuo_audio_impl* wlpavuo_audio_get_pw(void);
 #endif
 #endif

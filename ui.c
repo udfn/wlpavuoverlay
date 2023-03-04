@@ -542,6 +542,11 @@ static void set_progress_unselected_color(struct nk_context *ctx) {
 	set_nk_color(&ctx->style.progress.cursor_active.data.color, 160, 160, 160, 195);
 }
 
+static void do_iterate(struct nwl_state *state, void *data) {
+	struct wlpavuo_ui *ui = data;
+	ui->backend->iterate();
+}
+
 char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 	struct wlpavuo_ui *ui = surface->userdata;
 	if(!ui) {
@@ -568,7 +573,7 @@ char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 			ui->backend = wlpavuo_audio_get_pa();
 		}
 		if (ui->backend->iterate) {
-			nwl_poll_add_fd(surface->state, ui->backend->get_fd(), ui->backend->iterate, NULL);
+			nwl_poll_add_fd(surface->state, ui->backend->get_fd(), do_iterate, ui);
 			ui->backend->set_update_callback(handle_audio_update_singlethread, surface);
 		} else {
 			ui->evfd = eventfd(0, 0);

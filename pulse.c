@@ -17,7 +17,7 @@ struct wlpavuo_pulse_state {
 };
 static struct wlpavuo_pulse_state pulse_state = {0};
 
-static void fire_pulse_callback() {
+static void fire_pulse_callback(void) {
 	pulse_state.update_callback(pulse_state.update_callback_data);
 }
 
@@ -259,7 +259,7 @@ void wlpavuo_pulse_set_sink_volume(struct wlpavuo_audio_sink *sink, uint32_t vol
 	pa_operation_unref(pa_context_set_sink_volume_by_index(pulse_state.context, sink->id, &vol, handle_pulse_event_success,NULL));
 }
 
-static void wlpavuo_pulse_init() {
+static void wlpavuo_pulse_init(void) {
 	if (!pulse_state.context && pulse_state.status != WLPAVUO_AUDIO_STATUS_FAILED) {
 		wl_list_init(&pulse_state.clients);
 		wl_list_init(&pulse_state.sinks);
@@ -277,18 +277,18 @@ static void wlpavuo_pulse_init() {
 	}
 }
 
-enum wlpavuo_audio_status wlpavuo_pulse_get_status() {
+enum wlpavuo_audio_status wlpavuo_pulse_get_status(void) {
 	return pulse_state.status;
 }
 
-struct wl_list *wlpavuo_pulse_get_clients() {
+struct wl_list *wlpavuo_pulse_get_clients(void) {
 	return &pulse_state.clients;
 }
-struct wl_list *wlpavuo_pulse_get_sinks() {
+struct wl_list *wlpavuo_pulse_get_sinks(void) {
 	return &pulse_state.sinks;
 }
 
-void wlpavuo_pulse_uninit() {
+void wlpavuo_pulse_uninit(void) {
 	pa_context_disconnect(pulse_state.context);
 	pa_threaded_mainloop_stop(pulse_state.mainloop);
 	pa_threaded_mainloop_free(pulse_state.mainloop);
@@ -313,14 +313,14 @@ void wlpavuo_pulse_set_update_callback(wlpavuo_audio_update_cb_t cb, void *data)
 	pulse_state.update_callback = cb;
 }
 
-void wlpavuo_pulse_lock() {
+void wlpavuo_pulse_lock(void) {
 	pa_threaded_mainloop_lock(pulse_state.mainloop);
 }
-void wlpavuo_pulse_unlock() {
+void wlpavuo_pulse_unlock(void) {
 	pa_threaded_mainloop_unlock(pulse_state.mainloop);
 }
 
-static const char* pulse_get_name() {
+static const char* pulse_get_name(void) {
 	return "PulseAudio";
 }
 
@@ -341,7 +341,7 @@ static const struct wlpavuo_audio_impl pulse_impl = {
 	NULL
 };
 
-const struct wlpavuo_audio_impl* wlpavuo_audio_get_pa() {
+const struct wlpavuo_audio_impl* wlpavuo_audio_get_pa(void) {
 	wlpavuo_pulse_init();
 	return &pulse_impl;
 }
