@@ -489,7 +489,7 @@ void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_seat *seat
 
 static void maybe_update_size(struct nwl_surface *surf) {
 	struct wlpavuo_ui *ui = surf->userdata;
-	struct wlpavuo_state *state = surf->state->userdata;
+	struct wlpavuo_state *state = wl_container_of(surf->state, state, nwl);
 	if (state->dynamic_height) {
 		uint32_t new_height = 140;
 		if (surf->states & NWL_SURFACE_STATE_CSD) {
@@ -559,7 +559,7 @@ char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 		set_nk_color(&ui->color_table[NK_COLOR_WINDOW], 8,8,8,231);
 		nk_style_from_table(ui->context, ui->color_table);
 #ifdef HAVE_PIPEWIRE
-		struct wlpavuo_state *state = surface->state->userdata;
+		struct wlpavuo_state *state = wl_container_of(surface->state, state, nwl);
 		if (state->use_pipewire) {
 			ui->backend = wlpavuo_audio_get_pw();
 		} else

@@ -52,7 +52,7 @@ struct bgstatus_t {
 static void background_surface_update_sub(struct nwl_surface *surf) {
 	struct bgstatus_t *bgstatus = surf->userdata;
 	struct nwl_surface *subsurf = bgstatus->main_surface;
-	struct wlpavuo_state *wlpstate = surf->state->userdata;
+	struct wlpavuo_state *wlpstate = wl_container_of(surf->state, wlpstate, nwl);
 	if (bgstatus->actual_height != surf->desired_height ||
 			bgstatus->actual_width != surf->desired_height) {
 		bgstatus->actual_width = surf->desired_width;
@@ -109,7 +109,7 @@ static void sp_renderer_destroy(struct nwl_surface *surface) {
 }
 
 static void sp_renderer_swapbuffers(struct nwl_surface *surface, int32_t x, int32_t y) {
-	struct wlpavuo_state *wlpstate = surface->state->userdata;
+	struct wlpavuo_state *wlpstate = wl_container_of(surface->state, wlpstate, nwl);
 	if (surface->render.data) {
 		return;
 	}
@@ -183,9 +183,8 @@ static void setup_wlpavuo_ui_surface(struct wlpavuo_state *wlpstate, struct nwl_
 	}
 }
 
-static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_mode layer) {
-	struct wlpavuo_state *wlpstate = state->userdata;
-	struct nwl_surface *surf = nwl_surface_create(state, "WlPaVUOverlay");
+static void create_surface(struct wlpavuo_state *wlpstate, enum wlpavuo_surface_layer_mode layer) {
+	struct nwl_surface *surf = nwl_surface_create(&wlpstate->nwl, "WlPaVUOverlay");
 	if (!set_surface_role(surf, layer != WLPAVUO_SURFACE_LAYER_MODE_XDGSHELL)) {
 		nwl_surface_destroy(surf);
 		return;
@@ -197,7 +196,7 @@ static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_m
 			surf->states |= NWL_SURFACE_STATE_CSD;
 			base_height += 40;
 		} else {
-			struct wl_region *region = wl_compositor_create_region(state->wl.compositor);
+			struct wl_region *region = wl_compositor_create_region(wlpstate->nwl.wl.compositor);
 			wl_surface_set_input_region(surf->wl.surface, region);
 			wl_region_destroy(region);
 		}
@@ -224,10 +223,10 @@ static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_m
 				ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT|ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
 			zwlr_layer_surface_v1_set_exclusive_zone(surf->role.layer.wl, -1);
 			nwl_surface_set_size(surf, 0, 0);
-			if (state->wl.viewporter) {
-				surf->wl.viewport = wp_viewporter_get_viewport(state->wl.viewporter, surf->wl.surface);
+			if (wlpstate->nwl.wl.viewporter) {
+				surf->wl.viewport = wp_viewporter_get_viewport(wlpstate->nwl.wl.viewporter, surf->wl.surface);
 			}
-			struct nwl_surface *subsurf = nwl_surface_create(state, "WlPaVUOverlay sub");
+			struct nwl_surface *subsurf = nwl_surface_create(&wlpstate->nwl, "WlPaVUOverlay sub");
 			setup_wlpavuo_ui_surface(wlpstate, subsurf);
 			nwl_surface_role_subsurface(subsurf, surf);
 			nwl_surface_set_size(subsurf, wlpstate->width, wlpstate->dynamic_height ? base_height : wlpstate->height);
@@ -243,7 +242,7 @@ static void create_surface(struct nwl_state *state, enum wlpavuo_surface_layer_m
 
 bool handle_global(struct nwl_state *state, struct wl_registry *registry, uint32_t name, const char *interface, uint32_t version) {
 	if (strcmp(wp_single_pixel_buffer_manager_v1_interface.name, interface) == 0) {
-		struct wlpavuo_state *wlpstate = state->userdata;
+		struct wlpavuo_state *wlpstate = wl_container_of(state, wlpstate, nwl);
 		wlpstate->sp_buffer_manager = wl_registry_bind(registry, name, &wp_single_pixel_buffer_manager_v1_interface, 1);
 		return true;
 	}
@@ -255,11 +254,10 @@ int main (int argc, char *argv[]) {
 		.width = 620,
 		.height = 640,
 		.mode = WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELL,
-	};
-	struct nwl_state state = {
-		.xdg_app_id = "wlpavuoverlay",
-		.events.global_add = handle_global,
-		.userdata = &wlpstate,
+		.nwl = {
+			.xdg_app_id = "wlpavuoverlay",
+			.events.global_add = handle_global,
+		}
 	};
 	int opt;
 	while ((opt = getopt(argc, argv, "dxpsISw:h:BTLRH")) != -1) {
@@ -319,20 +317,20 @@ int main (int argc, char *argv[]) {
 			wlpstate.use_shm = true;
 		}
 	}
-	if (nwl_wayland_init(&state)) {
+	if (nwl_wayland_init(&wlpstate.nwl)) {
 		fprintf(stderr, "failed to init, bailing!\n");
 		return 1;
 	}
-	if (state.wl.compositor) {
-		create_surface(&state, wlpstate.mode);
+	if (wlpstate.nwl.wl.compositor) {
+		create_surface(&wlpstate, wlpstate.mode);
 	}
-	nwl_wayland_run(&state);
+	nwl_wayland_run(&wlpstate.nwl);
 	if (wlpstate.stdin_input) {
-		nwl_poll_del_fd(&state, 0);
+		nwl_poll_del_fd(&wlpstate.nwl, 0);
 	}
 	if (wlpstate.sp_buffer_manager) {
 		wp_single_pixel_buffer_manager_v1_destroy(wlpstate.sp_buffer_manager);
 	}
-	nwl_wayland_uninit(&state);
+	nwl_wayland_uninit(&wlpstate.nwl);
 	return 0;
 }

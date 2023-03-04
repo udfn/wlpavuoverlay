@@ -13,6 +13,7 @@ struct wlpavuo_state {
 	bool dynamic_height;
 	char mode;
 	uint32_t anchor;
+	struct nwl_state nwl;
 };
 
 void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_seat *seat, struct nwl_pointer_event *event);
