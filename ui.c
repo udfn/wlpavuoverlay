@@ -6,7 +6,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <cairo-gl.h>
 #include <cairo.h>
 #include <unistd.h>
 #include <xkbcommon/xkbcommon.h>

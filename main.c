@@ -8,7 +8,6 @@
 #include <wayland-egl.h>
 #include <wayland-cursor.h>
 #include <GL/gl.h>
-#include <cairo/cairo-gl.h>
 #include <cairo/cairo.h>
 #include <nwl/nwl.h>
 #include <nwl/surface.h>
@@ -172,7 +171,7 @@ static bool set_surface_role(struct nwl_surface *surface, char layer) {
 }
 
 static void setup_wlpavuo_ui_surface(struct wlpavuo_state *wlpstate, struct nwl_surface *surf) {
-	nwl_surface_renderer_cairo(surf, !wlpstate->use_shm, surface_render);
+	nwl_surface_renderer_cairo(surf, surface_render, 0);
 	surf->impl.destroy = wlpavuo_ui_destroy;
 	if (!wlpstate->no_seat) {
 		surf->impl.input_pointer = wlpavuo_ui_input_pointer;
@@ -215,7 +214,7 @@ static void create_surface(struct wlpavuo_state *wlpstate, enum wlpavuo_surface_
 			if (wlpstate->sp_buffer_manager) {
 				surf->render.impl = &background_surface_sp_renderer_impl;
 			} else {
-				nwl_surface_renderer_cairo(surf, !wlpstate->use_shm, background_surface_render);
+				nwl_surface_renderer_cairo(surf, background_surface_render, 0);
 			}
 			struct bgstatus_t *bgs = surf->userdata;
 			zwlr_layer_surface_v1_set_anchor(surf->role.layer.wl,
@@ -269,7 +268,6 @@ int main (int argc, char *argv[]) {
 				wlpstate.mode = WLPAVUO_SURFACE_LAYER_MODE_XDGSHELL;
 				break;
 			case 'p': wlpstate.use_pipewire = true; break;
-			case 's': wlpstate.use_shm = true; break;
 			case 'w':;
 				int width = atoi(optarg);
 				if (width > 0)
@@ -313,8 +311,6 @@ int main (int argc, char *argv[]) {
 			wlpstate.mode = WLPAVUO_SURFACE_LAYER_MODE_XDGSHELL;
 		} else if (strcmp(argv[i], "pw") == 0) {
 			wlpstate.use_pipewire = true;
-		} else if (strcmp(argv[i], "shm") == 0) {
-			wlpstate.use_shm = true;
 		}
 	}
 	if (nwl_wayland_init(&wlpstate.nwl)) {
