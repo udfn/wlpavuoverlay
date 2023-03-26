@@ -11,7 +11,6 @@ You can add arguments to change the behaviour.
 * `xdg` or `-x` - Use xdg-shell even if layer-shell is available.
 * `dim` or `-d` - "Fullscreen" mode. This makes mouse usage easier if another surface has locked or hidden the pointer. Only with layer-shell.
 * `pw` or `-p` - Use PipeWire instead of PulseAudio.
-* `shm` or `-s` - Use software rendering instead of GL. Not sure why you'd want this...
 * `-w _width_` - Set surface width.
 * `-h _height_` - Set surface height.
 * `-S` - Makes the surface not receive any Wayland seat input. Intended for use with `-I`.
