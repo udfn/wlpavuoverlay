@@ -34,9 +34,10 @@ static void surface_render(struct nwl_surface *surf, cairo_surface_t *cairo_surf
 	cairo_destroy(cr);
 	if (ret) {
 		nwl_surface_swapbuffers(surf, 0, 0);
-		if (surf->parent) {
-			wl_surface_damage_buffer(surf->parent->wl.surface, 0, 0, surf->parent->width, surf->parent->height);
-			wl_surface_commit(surf->parent->wl.surface);
+		if (surf->role_id == NWL_SURFACE_ROLE_SUB) {
+			struct nwl_surface *parent = surf->role.subsurface.parent;
+			wl_surface_damage_buffer(parent->wl.surface, 0, 0, parent->width, parent->height);
+			wl_surface_commit(parent->wl.surface);
 		}
 	}
 }
