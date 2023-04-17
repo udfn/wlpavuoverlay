@@ -25,13 +25,13 @@ enum wlpavuo_surface_layer_mode {
 	WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELLFULL,
 };
 
-static void surface_render(struct nwl_surface *surf, cairo_surface_t *cairo_surface) {
-	cairo_t *cr = cairo_create(cairo_surface);
+static void surface_render(struct nwl_surface *surf, struct nwl_cairo_surface *cairo_surface) {
+	cairo_t *cr = cairo_surface->ctx;
+	cairo_identity_matrix(cr);
 	char ret = wlpavuo_ui_run(surf, cr);
 	if (surf->states & NWL_SURFACE_STATE_DESTROY) {
 		ret = false;
 	}
-	cairo_destroy(cr);
 	if (ret) {
 		nwl_surface_swapbuffers(surf, 0, 0);
 		if (surf->role_id == NWL_SURFACE_ROLE_SUB) {
@@ -70,15 +70,14 @@ static void background_surface_update_sub(struct nwl_surface *surf) {
 	}
 }
 
-static void background_surface_render(struct nwl_surface *surf, cairo_surface_t *cairo_surface) {
+static void background_surface_render(struct nwl_surface *surf, struct nwl_cairo_surface *cairo_surface) {
 	struct bgstatus_t *bgstatus = surf->userdata;
 	background_surface_update_sub(surf);
 	if (!bgstatus->bgrendered) {
-		cairo_t *cr = cairo_create(cairo_surface);
+		cairo_t *cr = cairo_surface->ctx;
 		cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
 		cairo_set_source_rgba(cr, 0, 0, 0, 0.45);
 		cairo_paint(cr);
-		cairo_destroy(cr);
 		bgstatus->bgrendered = 1;
 		nwl_surface_set_need_draw(bgstatus->main_surface, true);
 		nwl_surface_swapbuffers(surf, 0, 0);
@@ -119,7 +118,6 @@ static void sp_renderer_swapbuffers(struct nwl_surface *surface, int32_t x, int3
 
 
 struct nwl_renderer_impl background_surface_sp_renderer_impl = {
-	.surface_destroy = sp_renderer_noop,
 	.swap_buffers = sp_renderer_swapbuffers,
 	.apply_size = sp_renderer_noop,
 	.render = background_surface_render_sp,
