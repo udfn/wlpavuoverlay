@@ -212,6 +212,7 @@ static void create_surface(struct wlpavuo_state *wlpstate, enum wlpavuo_surface_
 			surf->impl.configure = background_surface_configure;
 			if (wlpstate->sp_buffer_manager) {
 				surf->render.impl = &background_surface_sp_renderer_impl;
+				surf->render.data = NULL;
 			} else {
 				nwl_surface_renderer_cairo(surf, background_surface_render, 0);
 			}
