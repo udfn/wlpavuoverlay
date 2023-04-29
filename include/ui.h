@@ -4,6 +4,7 @@
 
 struct wlpavuo_state {
 	struct wp_single_pixel_buffer_manager_v1 *sp_buffer_manager;
+	struct wp_viewporter *viewporter;
 	bool use_pipewire;
 	bool no_seat;
 	bool stdin_input;

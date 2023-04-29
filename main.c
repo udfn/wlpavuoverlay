@@ -47,6 +47,7 @@ struct bgstatus_t {
 	uint32_t actual_width;
 	uint32_t actual_height;
 	struct nwl_surface *main_surface;
+	struct wp_viewport *viewport;
 };
 
 static void background_surface_update_sub(struct nwl_surface *surf) {
@@ -138,7 +139,9 @@ static void background_surface_input_pointer(struct nwl_surface *surf, struct nw
 
 static void background_surface_configure(struct nwl_surface *surf, uint32_t width, uint32_t height) {
 	if (surf->width != width || surf->height != height) {
-		if (nwl_surface_set_vp_destination(surf, width, height)) {
+		struct bgstatus_t *bgs = surf->userdata;
+		if (bgs->viewport) {
+			wp_viewport_set_destination(bgs->viewport, width, height);
 			// Er, abusing desired size for this? Ok then!
 			surf->desired_width = width;
 			surf->desired_height = height;
@@ -153,6 +156,10 @@ static void background_surface_configure(struct nwl_surface *surf, uint32_t widt
 }
 
 static void background_surface_destroy(struct nwl_surface *surf) {
+	struct bgstatus_t *bgs = surf->userdata;
+	if (bgs->viewport) {
+		wp_viewport_destroy(bgs->viewport);
+	}
 	free(surf->userdata);
 }
 
@@ -222,8 +229,8 @@ static void create_surface(struct wlpavuo_state *wlpstate, enum wlpavuo_surface_
 				ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT|ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
 			zwlr_layer_surface_v1_set_exclusive_zone(surf->role.layer.wl, -1);
 			nwl_surface_set_size(surf, 0, 0);
-			if (wlpstate->nwl.wl.viewporter) {
-				surf->wl.viewport = wp_viewporter_get_viewport(wlpstate->nwl.wl.viewporter, surf->wl.surface);
+			if (wlpstate->viewporter) {
+				bgs->viewport = wp_viewporter_get_viewport(wlpstate->viewporter, surf->wl.surface);
 			}
 			struct nwl_surface *subsurf = nwl_surface_create(&wlpstate->nwl, "WlPaVUOverlay sub");
 			setup_wlpavuo_ui_surface(wlpstate, subsurf);
@@ -240,10 +247,12 @@ static void create_surface(struct wlpavuo_state *wlpstate, enum wlpavuo_surface_
 }
 
 bool handle_global(struct nwl_state *state, struct wl_registry *registry, uint32_t name, const char *interface, uint32_t version) {
+	struct wlpavuo_state *wlpstate = wl_container_of(state, wlpstate, nwl);
 	if (strcmp(wp_single_pixel_buffer_manager_v1_interface.name, interface) == 0) {
-		struct wlpavuo_state *wlpstate = wl_container_of(state, wlpstate, nwl);
 		wlpstate->sp_buffer_manager = wl_registry_bind(registry, name, &wp_single_pixel_buffer_manager_v1_interface, 1);
 		return true;
+	} else if (strcmp(wp_viewporter_interface.name, interface) == 0) {
+		wlpstate->viewporter = wl_registry_bind(registry, name, &wp_viewporter_interface, 1);
 	}
 	return false;
 }
@@ -326,6 +335,9 @@ int main (int argc, char *argv[]) {
 	}
 	if (wlpstate.sp_buffer_manager) {
 		wp_single_pixel_buffer_manager_v1_destroy(wlpstate.sp_buffer_manager);
+	}
+	if (wlpstate.viewporter) {
+		wp_viewporter_destroy(wlpstate.viewporter);
 	}
 	nwl_wayland_uninit(&wlpstate.nwl);
 	return 0;

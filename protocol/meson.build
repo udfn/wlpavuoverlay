@@ -7,11 +7,13 @@ protos = [ ]
 if not nwlsub.found()
 	protos += [
 		proto_dir / 'stable/xdg-shell/xdg-shell.xml',
-		proto_dir / 'stable/viewporter/viewporter.xml',
 		'wlr-layer-shell-unstable-v1.xml'
 	]
 endif
-protos += proto_dir / 'staging/single-pixel-buffer/single-pixel-buffer-v1.xml'
+protos += [
+	proto_dir / 'staging/single-pixel-buffer/single-pixel-buffer-v1.xml',
+	proto_dir / 'stable/viewporter/viewporter.xml'
+]
 wl_gen_c = generator(wlscanner,
 	output: '@BASENAME@.c',
 	arguments: ['private-code', '@INPUT@', '@OUTPUT@'])
