@@ -1,6 +1,17 @@
 #ifndef _WLPV_UI_H
 #define _WLPV_UI_H
 #include <nwl/nwl.h>
+#include <nwl/surface.h>
+
+struct wlpavuo_surface {
+	struct nwl_surface main_surface;
+	struct nwl_surface bg_surface;
+	char bgrendered;
+	uint32_t actual_width;
+	uint32_t actual_height;
+	struct wp_viewport *viewport;
+	struct wlpavuo_ui *ui;
+};
 
 struct wlpavuo_state {
 	struct wp_single_pixel_buffer_manager_v1 *sp_buffer_manager;
@@ -14,6 +25,7 @@ struct wlpavuo_state {
 	char mode;
 	uint32_t anchor;
 	struct nwl_state nwl;
+	struct wlpavuo_surface surface;
 };
 
 void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_seat *seat, struct nwl_pointer_event *event);

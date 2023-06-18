@@ -181,7 +181,8 @@ static void set_nk_color(struct nk_color *color,nk_byte r,nk_byte g, nk_byte b, 
 
 #define WINDOW_RESIZE_BORDER 4
 #define WINDOW_CORNER_RESIZE 25
-static void check_window_move(struct nwl_surface *surface, struct nk_context *ctx) {
+static void check_window_move(struct wlpavuo_surface *wlpsurface, struct nk_context *ctx) {
+	struct nwl_surface *surface = &wlpsurface->main_surface;
 	if (!(surface->states & NWL_SURFACE_STATE_CSD)) {
 		return;
 	}
@@ -193,7 +194,7 @@ static void check_window_move(struct nwl_surface *surface, struct nk_context *ct
 	if (!surface->wl.xdg_surface) {
 		return;
 	}
-	struct wlpavuo_ui *ui = surface->userdata;
+	struct wlpavuo_ui *ui = wlpsurface->ui;
 	if (mainwin && ui->input.pointer_buttons & NWL_MOUSE_LEFT) {
 		int left_mouse_click_in_cursor;
 		// check resize...
@@ -264,7 +265,8 @@ static void check_window_move(struct nwl_surface *surface, struct nk_context *ct
 }
 
 void wlpavuo_ui_destroy(struct nwl_surface *surface) {
-	struct wlpavuo_ui *ui = surface->userdata;
+	struct wlpavuo_surface *wlpsurface = wl_container_of(surface, wlpsurface, main_surface);
+	struct wlpavuo_ui *ui = wlpsurface->ui;
 	if (ui->backend->iterate) {
 		nwl_poll_del_fd(surface->state, ui->backend->get_fd());
 	} else {
@@ -276,7 +278,7 @@ void wlpavuo_ui_destroy(struct nwl_surface *surface) {
 	free(ui->draw_last);
 	free(ui->draw_buf);
 	free(ui);
-	surface->userdata = NULL;
+	wlpsurface->ui = NULL;
 }
 
 void do_volume_control(struct nwl_surface *surface, struct nk_context *ctx,
@@ -347,8 +349,8 @@ static void ui_select_item(struct wlpavuo_ui *ui, int dir) {
 }
 
 void wlpavuo_ui_input_stdin(struct nwl_state *state, void *data) {
-	struct nwl_surface *surface = data;
-	struct wlpavuo_ui *ui = surface->userdata;
+	struct wlpavuo_surface *wlpsurface = data;
+	struct wlpavuo_ui *ui = wlpsurface->ui;
 	if (!ui) {
 		return;
 	}
@@ -384,15 +386,16 @@ void wlpavuo_ui_input_stdin(struct nwl_state *state, void *data) {
 				ui->input.mute_selected = 1;
 				break;
 			case 'q':
-				surface->state->num_surfaces = 0;
+				wlpsurface->main_surface.state->num_surfaces = 0;
 				break;
 		}
 	}
-	nwl_surface_set_need_draw(surface, true);
+	nwl_surface_set_need_draw(&wlpsurface->main_surface, true);
 }
 
 void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_seat *seat, struct nwl_keyboard_event *event) {
-	struct wlpavuo_ui *ui = surface->userdata;
+	struct wlpavuo_surface *wlpsurface = wl_container_of(surface, wlpsurface, main_surface);
+	struct wlpavuo_ui *ui = wlpsurface->ui;
 	if (!ui) {
 		return;
 	}
@@ -454,7 +457,8 @@ void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_seat *sea
 }
 
 void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_seat *seat, struct nwl_pointer_event *event) {
-	struct wlpavuo_ui *ui = surface->userdata;
+	struct wlpavuo_surface *wlpsurface = wl_container_of(surface, wlpsurface, main_surface);
+	struct wlpavuo_ui *ui = wlpsurface->ui;
 	if (!ui) {
 		return;
 	}
@@ -486,12 +490,12 @@ void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_seat *seat
 	nwl_surface_set_need_draw(surface, true);
 }
 
-static void maybe_update_size(struct nwl_surface *surf) {
-	struct wlpavuo_ui *ui = surf->userdata;
-	struct wlpavuo_state *state = wl_container_of(surf->state, state, nwl);
+static void maybe_update_size(struct wlpavuo_surface *surf) {
+	struct wlpavuo_ui *ui = surf->ui;
+	struct wlpavuo_state *state = wl_container_of(surf->main_surface.state, state, nwl);
 	if (state->dynamic_height) {
 		uint32_t new_height = 140;
-		if (surf->states & NWL_SURFACE_STATE_CSD) {
+		if (surf->main_surface.states & NWL_SURFACE_STATE_CSD) {
 			new_height += 40;
 		}
 		struct wlpavuo_audio_client *client;
@@ -503,33 +507,31 @@ static void maybe_update_size(struct nwl_surface *surf) {
 		if (new_height > state->height) {
 			new_height = state->height;
 		}
-		if (new_height > surf->desired_height) {
-			nwl_surface_set_size(surf, surf->desired_width, new_height);
+		if (new_height > surf->main_surface.desired_height) {
+			nwl_surface_set_size(&surf->main_surface, surf->main_surface.desired_width, new_height);
 		}
 	}
 }
 
 static void rerender_from_event(struct nwl_state *state, void *data) {
 	UNUSED(state);
-	struct nwl_surface *surf = data;
-	struct wlpavuo_ui *ui = surf->userdata;
+	struct wlpavuo_surface *surf = data;
 	eventfd_t val;
-	eventfd_read(ui->evfd, &val);
+	eventfd_read(surf->ui->evfd, &val);
 	maybe_update_size(surf);
-	nwl_surface_set_need_draw(surf, false);
+	nwl_surface_set_need_draw(&surf->main_surface, false);
 }
 
 static void handle_audio_update_singlethread(void *data) {
-	struct nwl_surface *surf = data;
+	struct wlpavuo_surface *surf = data;
 	maybe_update_size(surf);
-	nwl_surface_set_need_draw(surf, false);
+	nwl_surface_set_need_draw(&surf->main_surface, false);
 }
 
 static void handle_audio_update(void *data) {
-	struct nwl_surface *surf = data;
-	struct wlpavuo_ui *ui = surf->userdata;
+	struct wlpavuo_surface *surface = data;
 	// Tell the main thread to update..
-	eventfd_write(ui->evfd, 1);
+	eventfd_write(surface->ui->evfd, 1);
 }
 
 static void set_progress_unselected_color(struct nk_context *ctx) {
@@ -547,11 +549,12 @@ static void do_iterate(struct nwl_state *state, void *data) {
 }
 
 char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
-	struct wlpavuo_ui *ui = surface->userdata;
+	struct wlpavuo_surface *wlpsurface = wl_container_of(surface, wlpsurface, main_surface);
+	struct wlpavuo_ui *ui = wlpsurface->ui;
 	if(!ui) {
-		surface->userdata = calloc(1,sizeof(struct wlpavuo_ui));
-		ui = surface->userdata;
-		ui->context = calloc(1,sizeof(struct nk_context));
+		wlpsurface->ui = calloc(1, sizeof(struct wlpavuo_ui));
+		ui = wlpsurface->ui;
+		ui->context = calloc(1, sizeof(struct nk_context));
 		ui->draw_buf = calloc(1,64*1024);
 		ui->draw_last = calloc(1,64*1024);
 		ui->font.width = calc_text_length;
@@ -573,11 +576,11 @@ char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 		}
 		if (ui->backend->iterate) {
 			nwl_poll_add_fd(surface->state, ui->backend->get_fd(), do_iterate, ui);
-			ui->backend->set_update_callback(handle_audio_update_singlethread, surface);
+			ui->backend->set_update_callback(handle_audio_update_singlethread, wlpsurface);
 		} else {
 			ui->evfd = eventfd(0, 0);
-			nwl_poll_add_fd(surface->state, ui->evfd, rerender_from_event, surface);
-			ui->backend->set_update_callback(handle_audio_update, surface);
+			nwl_poll_add_fd(surface->state, ui->evfd, rerender_from_event, wlpsurface);
+			ui->backend->set_update_callback(handle_audio_update, wlpsurface);
 		}
 	}
 	const struct wlpavuo_audio_impl *aimpl = ui->backend;
@@ -696,7 +699,7 @@ char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 	}
 	aimpl->unlock();
 	nk_end(ctx);
-	check_window_move(surface,ctx);
+	check_window_move(wlpsurface, ctx);
 	void *cmds = nk_buffer_memory(&ctx->memory);
 	if (memcmp(cmds, ui->draw_last, ctx->memory.allocated) ||
 		ui->height != surface->height || ui->width != surface->width || surface->scale != ui->scale) {
