@@ -12,6 +12,7 @@
 #include <nwl/surface.h>
 #include <nwl/seat.h>
 #include <sys/eventfd.h>
+#include <sys/epoll.h>
 #include "ui.h"
 #include "nuklear.h"
 #include "xdg-shell.h"
@@ -348,7 +349,7 @@ static void ui_select_item(struct wlpavuo_ui *ui, int dir) {
 	ui->input.scroll_to_selected = 1;
 }
 
-void wlpavuo_ui_input_stdin(struct nwl_state *state, void *data) {
+void wlpavuo_ui_input_stdin(struct nwl_state *state, uint32_t events, void *data) {
 	struct wlpavuo_surface *wlpsurface = data;
 	struct wlpavuo_ui *ui = wlpsurface->ui;
 	if (!ui) {
@@ -513,8 +514,9 @@ static void maybe_update_size(struct wlpavuo_surface *surf) {
 	}
 }
 
-static void rerender_from_event(struct nwl_state *state, void *data) {
+static void rerender_from_event(struct nwl_state *state, uint32_t events, void *data) {
 	UNUSED(state);
+	UNUSED(events);
 	struct wlpavuo_surface *surf = data;
 	eventfd_t val;
 	eventfd_read(surf->ui->evfd, &val);
@@ -543,7 +545,7 @@ static void set_progress_unselected_color(struct nk_context *ctx) {
 	set_nk_color(&ctx->style.progress.cursor_active.data.color, 160, 160, 160, 195);
 }
 
-static void do_iterate(struct nwl_state *state, void *data) {
+static void do_iterate(struct nwl_state *state, uint32_t events, void *data) {
 	struct wlpavuo_ui *ui = data;
 	ui->backend->iterate();
 }
@@ -575,11 +577,11 @@ char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 			ui->backend = wlpavuo_audio_get_pa();
 		}
 		if (ui->backend->iterate) {
-			nwl_poll_add_fd(surface->state, ui->backend->get_fd(), do_iterate, ui);
+			nwl_poll_add_fd(surface->state, ui->backend->get_fd(), EPOLLIN, do_iterate, ui);
 			ui->backend->set_update_callback(handle_audio_update_singlethread, wlpsurface);
 		} else {
 			ui->evfd = eventfd(0, 0);
-			nwl_poll_add_fd(surface->state, ui->evfd, rerender_from_event, wlpsurface);
+			nwl_poll_add_fd(surface->state, ui->evfd, EPOLLIN, rerender_from_event, wlpsurface);
 			ui->backend->set_update_callback(handle_audio_update, wlpsurface);
 		}
 	}

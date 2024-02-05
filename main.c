@@ -13,6 +13,7 @@
 #include <nwl/surface.h>
 #include <nwl/seat.h>
 #include <nwl/cairo.h>
+#include <sys/epoll.h>
 #include "ui.h"
 #include "wlr-layer-shell-unstable-v1.h"
 #include "single-pixel-buffer-v1.h"
@@ -162,7 +163,7 @@ static void setup_wlpavuo_ui_surface(struct wlpavuo_state *wlpstate) {
 		surf->impl.input_keyboard = wlpavuo_ui_input_keyboard;
 	}
 	if (wlpstate->stdin_input) {
-		nwl_poll_add_fd(surf->state, 0, wlpavuo_ui_input_stdin, &wlpstate->surface);
+		nwl_poll_add_fd(surf->state, 0, EPOLLIN, wlpavuo_ui_input_stdin, &wlpstate->surface);
 	}
 }
 
