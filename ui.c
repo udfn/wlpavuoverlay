@@ -366,14 +366,14 @@ void wlpavuo_ui_input_stdin(struct nwl_state *state, void *data) {
 				if (ui->input.adjusting_volume) {
 					ui->input.adjust_vol += 2500;
 				} else {
-					ui_select_item(ui, -1);
+					ui_select_item(ui, 1);
 				}
 				break;
 			case 'd':
 				if (ui->input.adjusting_volume) {
 					ui->input.adjust_vol -= 2500;
 				} else {
-					ui_select_item(ui, 1);
+					ui_select_item(ui, -1);
 				}
 				break;
 			case 'j':
