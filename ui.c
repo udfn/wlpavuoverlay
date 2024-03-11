@@ -279,6 +279,7 @@ void wlpavuo_ui_destroy(struct nwl_surface *surface) {
 	free(ui->draw_last);
 	free(ui->draw_buf);
 	free(ui);
+	nwl_cairo_renderer_finish(&wlpsurface->cairo_renderer);
 	wlpsurface->ui = NULL;
 }
 
@@ -391,7 +392,7 @@ void wlpavuo_ui_input_stdin(struct nwl_state *state, uint32_t events, void *data
 				break;
 		}
 	}
-	nwl_surface_set_need_draw(&wlpsurface->main_surface, true);
+	nwl_surface_set_need_update(&wlpsurface->main_surface, true);
 }
 
 void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_seat *seat, struct nwl_keyboard_event *event) {
@@ -454,7 +455,7 @@ void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_seat *sea
 		// This shouldn't be here, and maybe repeat should be on by default?
 		seat->keyboard_repeat_enabled = true;
 	}
-	nwl_surface_set_need_draw(surface, true);
+	nwl_surface_set_need_update(surface, true);
 }
 
 void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_seat *seat, struct nwl_pointer_event *event) {
@@ -488,7 +489,7 @@ void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_seat *seat
 	}
 	ui->input.pointer_serial = event->serial;
 	ui->input.last_input = seat;
-	nwl_surface_set_need_draw(surface, true);
+	nwl_surface_set_need_update(surface, true);
 }
 
 static void maybe_update_size(struct wlpavuo_surface *surf) {
@@ -521,13 +522,13 @@ static void rerender_from_event(struct nwl_state *state, uint32_t events, void *
 	eventfd_t val;
 	eventfd_read(surf->ui->evfd, &val);
 	maybe_update_size(surf);
-	nwl_surface_set_need_draw(&surf->main_surface, false);
+	nwl_surface_set_need_update(&surf->main_surface, false);
 }
 
 static void handle_audio_update_singlethread(void *data) {
 	struct wlpavuo_surface *surf = data;
 	maybe_update_size(surf);
-	nwl_surface_set_need_draw(&surf->main_surface, false);
+	nwl_surface_set_need_update(&surf->main_surface, false);
 }
 
 static void handle_audio_update(void *data) {
@@ -550,9 +551,9 @@ static void do_iterate(struct nwl_state *state, uint32_t events, void *data) {
 	ui->backend->iterate();
 }
 
-char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
-	struct wlpavuo_surface *wlpsurface = wl_container_of(surface, wlpsurface, main_surface);
+void wlpavuo_ui_run(struct wlpavuo_surface *wlpsurface) {
 	struct wlpavuo_ui *ui = wlpsurface->ui;
+	struct nwl_surface *surface = &wlpsurface->main_surface;
 	if(!ui) {
 		wlpsurface->ui = calloc(1, sizeof(struct wlpavuo_ui));
 		ui = wlpsurface->ui;
@@ -586,6 +587,8 @@ char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 		}
 	}
 	const struct wlpavuo_audio_impl *aimpl = ui->backend;
+	struct nwl_cairo_surface *cairo_surface = nwl_cairo_renderer_get_surface(&wlpsurface->cairo_renderer, surface, false);
+	cairo_t *cr = cairo_surface->ctx;
 	ui->font.userdata.ptr = cr;
 	ui->fontsmol.userdata.ptr = cr;
 	struct nk_context *ctx = ui->context;
@@ -609,7 +612,6 @@ char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 	nk_flags winflags = surface->states & NWL_SURFACE_STATE_CSD ? NK_WINDOW_TITLE|NK_WINDOW_BORDER|NK_WINDOW_CLOSABLE:
 		surface->role_id == NWL_SURFACE_ROLE_LAYER || surface->role_id == NWL_SURFACE_ROLE_SUB ? NK_WINDOW_BORDER : 0;
 	int inset = winflags ? 1 : 0;
-	cairo_scale(cr, scale,scale);
 	nk_style_set_font(ctx, &ui->font);
 	if (nk_begin_titled(ctx, "mainwin", surface->title,nk_rect(inset,inset,
 			surface->width-(inset*2),surface->height-(inset*2)),
@@ -691,7 +693,7 @@ char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 			}
 			if (counter-1 < ui->input.selected) {
 				ui->input.selected = counter-1;
-				nwl_surface_set_need_draw(surface,true);
+				nwl_surface_set_need_update(surface,true);
 			}
 			ui->num_items = counter;
 		}
@@ -705,6 +707,7 @@ char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 	void *cmds = nk_buffer_memory(&ctx->memory);
 	if (memcmp(cmds, ui->draw_last, ctx->memory.allocated) ||
 		ui->height != surface->height || ui->width != surface->width || surface->scale != ui->scale) {
+		cairo_scale(cr, scale,scale);
 		ui->scale = surface->scale;
 		memcpy(ui->draw_last,cmds,ctx->memory.allocated);
 		ui->width = surface->width;
@@ -714,9 +717,11 @@ char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr) {
 		cairo_paint(cr);
 		cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
 		wlpavuo_ui_render(ctx, cr);
-		nk_clear(ctx);
-		return 1;
+		nwl_cairo_renderer_submit(&wlpsurface->cairo_renderer, surface, 0, 0);
+		// Ugly hack..
+		if (surface->role_id == NWL_SURFACE_ROLE_SUB) {
+			wl_surface_commit(wlpsurface->bg_surface.wl.surface);
+		}
 	}
 	nk_clear(ctx);
-	return 0;
 }

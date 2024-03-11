@@ -2,10 +2,15 @@
 #define _WLPV_UI_H
 #include <nwl/nwl.h>
 #include <nwl/surface.h>
-
+#include <nwl/cairo.h>
 struct wlpavuo_surface {
 	struct nwl_surface main_surface;
 	struct nwl_surface bg_surface;
+	struct nwl_cairo_renderer cairo_renderer;
+	union {
+		struct wl_buffer *pixel_buffer;
+		struct nwl_cairo_renderer cairo;
+	} background_render;
 	char bgrendered;
 	uint32_t actual_width;
 	uint32_t actual_height;
@@ -31,7 +36,7 @@ struct wlpavuo_state {
 void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_seat *seat, struct nwl_pointer_event *event);
 void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_seat *seat, struct nwl_keyboard_event *event);
 void wlpavuo_ui_input_stdin(struct nwl_state *state, uint32_t events, void *data);
-char wlpavuo_ui_run(struct nwl_surface *surface, cairo_t *cr);
+void wlpavuo_ui_run(struct wlpavuo_surface *wlpsurface);
 void wlpavuo_ui_destroy(struct nwl_surface *surface);
 
 #endif
