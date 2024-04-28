@@ -501,10 +501,14 @@ static void maybe_update_size(struct wlpavuo_surface *surf) {
 			new_height += 40;
 		}
 		struct wlpavuo_audio_client *client;
+		struct wlpavuo_audio_sink *sink;
 		wl_list_for_each(client, ui->backend->get_clients(), link) {
 			if (client->streams_count) {
 				new_height += 21 + (client->streams_count * 63);
 			}
+		}
+		wl_list_for_each(sink, ui->backend->get_sinks(), link) {
+			new_height += 21;
 		}
 		if (new_height > state->height) {
 			new_height = state->height;
