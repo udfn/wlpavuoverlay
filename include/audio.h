@@ -9,6 +9,7 @@ enum wlpavuo_audio_status {
 };
 enum wlpavuo_audio_info_flags {
 	WLPAVUO_AUDIO_MUTED = 1 << 0,
+	WLPAVUO_AUDIO_DEFAULT_SINK = 1 << 1,
 };
 
 struct wlpavuo_audio_client_stream {

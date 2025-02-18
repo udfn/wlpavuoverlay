@@ -12,8 +12,10 @@ struct wlpavuo_pulse_state {
 	wlpavuo_audio_update_cb_t update_callback;
 	void *update_callback_data;
 
-	struct wl_list clients; // wlpavuo_pulse_client
-	struct wl_list sinks; // wlpavuo_pulse_sink
+	char *default_sink_name;
+
+	struct wl_list clients; // wlpavuo_audio_client
+	struct wl_list sinks; // wlpavuo_audio_sink
 };
 static struct wlpavuo_pulse_state pulse_state = {0};
 
@@ -107,12 +109,20 @@ static void handle_sink_info(pa_context *c, const pa_sink_info *i, int eol, void
 			sink = calloc(1,sizeof(struct wlpavuo_audio_sink));
 			sink->id = i->index;
 			sink->name = strdup(i->description);
+			if (pulse_state.default_sink_name && strcmp(i->name, pulse_state.default_sink_name) == 0) {
+				sink->flags = WLPAVUO_AUDIO_DEFAULT_SINK;
+			}
 			wl_list_insert(&pulse_state.sinks, &sink->link);
 		}
 		sink->channels = i->volume.channels;
 		sink->volume = i->volume.values[0];
-		sink->flags = i->mute ? WLPAVUO_AUDIO_MUTED : 0;
+		if (i->mute) {
+			sink->flags |= WLPAVUO_AUDIO_MUTED;
+		} else {
+			sink->flags &= ~WLPAVUO_AUDIO_MUTED;
+		}
 	} else {
+		pulse_state.status = WLPAVUO_AUDIO_STATUS_READY;
 		fire_pulse_callback();
 	}
 }
@@ -212,6 +222,15 @@ static void handle_pulse_event(pa_context *c, pa_subscription_event_type_t t, ui
 	}
 }
 
+static void handle_server_info(pa_context *c, const pa_server_info *i, void *userdata) {
+	if (i->default_sink_name) {
+		pulse_state.default_sink_name = strdup(i->default_sink_name);
+	}
+	pa_context_get_sink_info_list(pulse_state.context, handle_sink_info, NULL);
+	pa_context_get_client_info_list(c, handle_client_info, NULL);
+	pa_operation_unref(pa_context_get_sink_input_info_list(c, handle_sink_input_info, NULL));
+}
+
 static void handle_pulse_state(pa_context *c, void *userdata) {
 	UNUSED(userdata);
 	pa_context_state_t state = pa_context_get_state(c);
@@ -222,11 +241,8 @@ static void handle_pulse_state(pa_context *c, void *userdata) {
 		pulse_state.status = WLPAVUO_AUDIO_STATUS_CONNECTING;
 		break;
 		case PA_CONTEXT_READY:
-		pulse_state.status = WLPAVUO_AUDIO_STATUS_READY;
 		pa_context_subscribe(pulse_state.context, PA_SUBSCRIPTION_MASK_ALL, handle_pulse_event_success, NULL);
-		pa_context_get_sink_info_list(pulse_state.context, handle_sink_info, NULL);
-		pa_context_get_client_info_list(c, handle_client_info, NULL);
-		pa_operation_unref(pa_context_get_sink_input_info_list(c, handle_sink_input_info, NULL));
+		pa_operation_unref(pa_context_get_server_info(c, handle_server_info, NULL));
 		break;
 		default:
 		pulse_state.status = WLPAVUO_AUDIO_STATUS_FAILED;
@@ -292,6 +308,9 @@ void wlpavuo_pulse_uninit(void) {
 	pa_context_disconnect(pulse_state.context);
 	pa_threaded_mainloop_stop(pulse_state.mainloop);
 	pa_threaded_mainloop_free(pulse_state.mainloop);
+	if (pulse_state.default_sink_name) {
+		free(pulse_state.default_sink_name);
+	}
 
 	struct wlpavuo_audio_client *client;
 	struct wlpavuo_audio_client *clienttmp;

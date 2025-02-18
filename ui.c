@@ -31,6 +31,7 @@ struct wlpavuo_ui {
 	struct nk_rect rect;
 	struct nk_color color_table[NK_COLOR_COUNT];
 	nk_bool active;
+	bool inited;
 	struct {
 		int32_t pointer_x, pointer_y;
 		int32_t pointer_down_x, pointer_down_y;
@@ -170,7 +171,6 @@ static void copy_wlpavuo_input_to_nk(struct wlpavuo_ui *ui, struct nk_context *c
 		ui->input.scroll_hori = 0;
 	}
 	nk_input_end(ctx);
-
 }
 
 static void set_nk_color(struct nk_color *color,nk_byte r,nk_byte g, nk_byte b, nk_byte a) {
@@ -285,6 +285,12 @@ void wlpavuo_ui_destroy(struct nwl_surface *surface) {
 
 void do_volume_control(struct nwl_surface *surface, struct nk_context *ctx,
 		struct nk_user_font *font, struct nk_user_font *fontb, char *label, unsigned long *volume, int *mute) {
+	struct nk_color color_orig = ctx->style.text.color;
+	struct nk_color color_muted = color_orig;
+	color_muted.a = color_muted.a/2;
+	if (*mute) {
+		ctx->style.text.color = color_muted;
+	}
 	nk_style_set_font(ctx, font);
 	nk_layout_row_begin(ctx, NK_STATIC, 22, 2);
 	nk_layout_row_push(ctx, surface->width-90);
@@ -299,17 +305,29 @@ void do_volume_control(struct nwl_surface *surface, struct nk_context *ctx,
 	nk_checkbox_label(ctx, "Mute", mute);
 	nk_layout_row_end(ctx);
 	nk_layout_row_dynamic(ctx, 30, 1);
+	struct nk_style_progress progress_style = ctx->style.progress;
+	if (*mute) {
+		ctx->style.progress.normal.data.color.a = progress_style.normal.data.color.a/2;
+		ctx->style.progress.hover.data.color.a = progress_style.hover.data.color.a/2;
+		ctx->style.progress.active.data.color.a = progress_style.active.data.color.a/2;
+		ctx->style.progress.cursor_normal.data.color.a = progress_style.cursor_normal.data.color.a/2;
+		ctx->style.progress.cursor_hover.data.color.a = progress_style.cursor_hover.data.color.a/2;
+		ctx->style.progress.cursor_active.data.color.a = progress_style.cursor_active.data.color.a/2;
+	}
 	nk_progress(ctx, volume, 0x10000U, 1);
+	ctx->style.text.color = color_orig;
+	ctx->style.progress = progress_style;
 }
 
 void do_keyboard_input(struct wlpavuo_ui *ui, struct nk_context *ctx, unsigned long *volume, int *mute, int *scroll) {
 	set_nk_color(&ctx->style.progress.normal.data.color, 37, 57, 86, 255);
-	set_nk_color(&ctx->style.progress.hover.data.color, 52, 72, 101, 255);
+	set_nk_color(&ctx->style.progress.hover.data.color, 72, 72, 101, 255);
 	set_nk_color(&ctx->style.progress.active.data.color, 52, 72, 101, 255);
+	set_nk_color(&ctx->style.text.color, 235, 235, 250, 240);
 	if (ui->input.adjusting_volume) {
-		set_nk_color(&ctx->style.progress.cursor_normal.data.color, 140, 160, 180, 240);
-		set_nk_color(&ctx->style.progress.cursor_hover.data.color, 165, 185, 205, 240);
-		set_nk_color(&ctx->style.progress.cursor_active.data.color, 195, 210, 230, 240);
+		set_nk_color(&ctx->style.progress.cursor_normal.data.color, 140, 160, 180, 230);
+		set_nk_color(&ctx->style.progress.cursor_hover.data.color, 165, 185, 205, 230);
+		set_nk_color(&ctx->style.progress.cursor_active.data.color, 195, 210, 230, 230);
 	} else {
 		set_nk_color(&ctx->style.progress.cursor_normal.data.color, 110, 110, 110, 195);
 		set_nk_color(&ctx->style.progress.cursor_hover.data.color, 135, 135, 135, 195);
@@ -496,7 +514,7 @@ static void maybe_update_size(struct wlpavuo_surface *surf) {
 	struct wlpavuo_ui *ui = surf->ui;
 	struct wlpavuo_state *state = wl_container_of(surf->main_surface.state, state, nwl);
 	if (state->dynamic_height) {
-		uint32_t new_height = 140;
+		uint32_t new_height = 50;
 		if (surf->main_surface.states & NWL_SURFACE_STATE_CSD) {
 			new_height += 40;
 		}
@@ -504,11 +522,11 @@ static void maybe_update_size(struct wlpavuo_surface *surf) {
 		struct wlpavuo_audio_sink *sink;
 		wl_list_for_each(client, ui->backend->get_clients(), link) {
 			if (client->streams_count) {
-				new_height += 21 + (client->streams_count * 63);
+				new_height += 24 + (client->streams_count * 60);
 			}
 		}
 		wl_list_for_each(sink, ui->backend->get_sinks(), link) {
-			new_height += 21;
+			new_height += 65;
 		}
 		if (new_height > state->height) {
 			new_height = state->height;
@@ -542,9 +560,9 @@ static void handle_audio_update(void *data) {
 }
 
 static void set_progress_unselected_color(struct nk_context *ctx) {
-	set_nk_color(&ctx->style.progress.normal.data.color, 35, 35, 35, 255);
-	set_nk_color(&ctx->style.progress.hover.data.color, 45, 45, 45, 255);
-	set_nk_color(&ctx->style.progress.active.data.color, 45, 45, 45, 255);
+	set_nk_color(&ctx->style.progress.normal.data.color, 35, 35, 35, 195);
+	set_nk_color(&ctx->style.progress.hover.data.color, 45, 45, 45, 195);
+	set_nk_color(&ctx->style.progress.active.data.color, 45, 45, 45, 195);
 	set_nk_color(&ctx->style.progress.cursor_normal.data.color, 110, 110, 110, 195);
 	set_nk_color(&ctx->style.progress.cursor_hover.data.color, 135, 135, 135, 195);
 	set_nk_color(&ctx->style.progress.cursor_active.data.color, 160, 160, 160, 195);
@@ -638,9 +656,21 @@ void wlpavuo_ui_run(struct wlpavuo_surface *wlpsurface) {
 			struct wl_list *clients = aimpl->get_clients();
 			int counter = 0;
 			struct wlpavuo_audio_sink *sink;
+			if (!ui->inited) {
+				ui->inited = true;
+				wl_list_for_each(sink, sinks, link) {
+					if (sink->flags & WLPAVUO_AUDIO_DEFAULT_SINK) {
+						ui->input.selected = counter;
+						break;
+					}
+					counter++;
+				}
+				counter = 0;
+			}
 			wl_list_for_each(sink, sinks, link) {
 				int mutetmp = sink->flags & WLPAVUO_AUDIO_MUTED;
 				unsigned long voltmp = sink->volume;
+				struct nk_color orig_text_color = ctx->style.text.color;
 				if (counter == ui->input.selected) {
 					do_keyboard_input(ui, ctx, &voltmp, &mutetmp, &scroll_to);
 				}
@@ -655,6 +685,7 @@ void wlpavuo_ui_run(struct wlpavuo_surface *wlpsurface) {
 				if (voltmp != sink->volume) {
 					aimpl->set_sink_volume(sink, voltmp);
 				}
+				ctx->style.text.color = orig_text_color;
 				counter++;
 			}
 			nk_style_set_font(ctx, &ui->font);
@@ -664,6 +695,7 @@ void wlpavuo_ui_run(struct wlpavuo_surface *wlpsurface) {
 			// Go through the list in reverse, to make new clients not push everything down
 			wl_list_for_each_reverse(client, clients, link) {
 				nk_style_set_font(ctx, &ui->font);
+				struct nk_color orig_text_color = ctx->style.text.color;
 				if (client->streams_count == 0) {
 					continue;
 				}
@@ -688,6 +720,7 @@ void wlpavuo_ui_run(struct wlpavuo_surface *wlpsurface) {
 					if (voltmp != stream->volume) {
 						aimpl->set_stream_volume(stream, voltmp);
 					}
+					ctx->style.text.color = orig_text_color;
 					counter++;
 				}
 			}

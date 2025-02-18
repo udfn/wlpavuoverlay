@@ -93,6 +93,7 @@ static void background_surface_input_pointer(struct nwl_surface *surf, struct nw
 static void background_surface_configure(struct nwl_surface *surf, uint32_t width, uint32_t height) {
 	if (surf->width != width || surf->height != height) {
 		struct wlpavuo_surface *bgs = wl_container_of(surf, bgs, bg_surface);
+		nwl_surface_set_need_update(surf, false);
 		if (bgs->viewport) {
 			wp_viewport_set_destination(bgs->viewport, width, height);
 			// Er, abusing desired size for this? Ok then!
