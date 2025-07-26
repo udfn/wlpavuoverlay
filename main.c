@@ -33,9 +33,15 @@ static void surface_update(struct nwl_surface *surf) {
 	surf->defer_update = false;
 }
 
+struct wlpavuo_state *state_from_core(struct nwl_core *core) {
+	struct nwl_easy *easy = wl_container_of(core, easy, core);
+	struct wlpavuo_state *state = wl_container_of(easy, state, nwl);
+	return state;
+}
+
 static void background_surface_update_sub(struct wlpavuo_surface *bgstatus) {
 	struct nwl_surface *subsurf = &bgstatus->main_surface;
-	struct wlpavuo_state *wlpstate = wl_container_of(bgstatus->bg_surface.state, wlpstate, nwl);
+	struct wlpavuo_state *wlpstate = state_from_core(bgstatus->main_surface.core);
 	if (bgstatus->actual_height != bgstatus->bg_surface.desired_height ||
 			bgstatus->actual_width != bgstatus->bg_surface.desired_height) {
 		bgstatus->actual_width = bgstatus->bg_surface.desired_width;
@@ -57,7 +63,7 @@ static void background_surface_update(struct nwl_surface *surf) {
 	struct wlpavuo_surface *bgstatus = wl_container_of(surf, bgstatus, bg_surface);
 	background_surface_update_sub(bgstatus);
 	if (!bgstatus->bgrendered) {
-		struct wlpavuo_state *state = wl_container_of(surf->state, state, nwl);
+		struct wlpavuo_state *state = state_from_core(surf->core);
 		if (state->sp_buffer_manager) {
 			bgstatus->background_render.pixel_buffer = wp_single_pixel_buffer_manager_v1_create_u32_rgba_buffer(state->sp_buffer_manager, 0, 0, 0, 1932735282);
 			wl_surface_attach(surf->wl.surface, bgstatus->background_render.pixel_buffer, 0, 0);
@@ -111,7 +117,7 @@ static void background_surface_configure(struct nwl_surface *surf, uint32_t widt
 
 static void background_surface_destroy(struct nwl_surface *surf) {
 	struct wlpavuo_surface *bgs = wl_container_of(surf, bgs, bg_surface);
-	struct wlpavuo_state *state = wl_container_of(surf->state, state, nwl);
+	struct wlpavuo_state *state = state_from_core(surf->core);
 	if (bgs->viewport) {
 		wp_viewport_destroy(bgs->viewport);
 	}
@@ -132,17 +138,17 @@ static void setup_wlpavuo_ui_surface(struct wlpavuo_state *wlpstate) {
 		surf->impl.input_keyboard = wlpavuo_ui_input_keyboard;
 	}
 	if (wlpstate->stdin_input) {
-		nwl_poll_add_fd(surf->state, 0, EPOLLIN, wlpavuo_ui_input_stdin, &wlpstate->surface);
+		nwl_easy_add_fd(&wlpstate->nwl, 0, EPOLLIN, wlpavuo_ui_input_stdin, &wlpstate->surface);
 	}
 }
 
 static void create_surface(struct wlpavuo_state *wlpstate) {
 	struct wlpavuo_surface *surf = &wlpstate->surface;
-	nwl_surface_init(&surf->main_surface, &wlpstate->nwl, "WlPaVUOverlay");
+	nwl_surface_init(&surf->main_surface, &wlpstate->nwl.core, "WlPaVUOverlay");
 	setup_wlpavuo_ui_surface(wlpstate);
 	switch (wlpstate->mode) {
 		case WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELLFULL:
-		nwl_surface_init(&surf->bg_surface, &wlpstate->nwl, "WlPaVUOverlay");
+		nwl_surface_init(&surf->bg_surface, &wlpstate->nwl.core, "WlPaVUOverlay");
 		nwl_surface_role_layershell(&surf->bg_surface, NULL, ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY);
 		nwl_surface_role_subsurface(&surf->main_surface, &surf->bg_surface);
 		surf->bg_surface.impl.destroy = background_surface_destroy;
@@ -176,11 +182,11 @@ static void create_surface(struct wlpavuo_state *wlpstate) {
 	if (surf->main_surface.role_id != NWL_SURFACE_ROLE_TOPLEVEL) {
 		uint32_t base_height = 140;
 		if (!wlpstate->no_seat) {
-			zwlr_layer_surface_v1_set_keyboard_interactivity(wlpstate->mode == WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELLFULL ? 
+			zwlr_layer_surface_v1_set_keyboard_interactivity(wlpstate->mode == WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELLFULL ?
 				surf->bg_surface.role.layer.wl : surf->main_surface.role.layer.wl, 1);
 			base_height += 40;
 		} else {
-			struct wl_region *region = wl_compositor_create_region(wlpstate->nwl.wl.compositor);
+			struct wl_region *region = wl_compositor_create_region(wlpstate->nwl.core.wl.compositor);
 			wl_surface_set_input_region(surf->main_surface.wl.surface, region);
 			wl_region_destroy(region);
 			surf->main_surface.states &= ~NWL_SURFACE_STATE_CSD;
@@ -193,7 +199,7 @@ static void create_surface(struct wlpavuo_state *wlpstate) {
 	}
 }
 
-bool handle_global(struct nwl_state *state, struct wl_registry *registry, uint32_t name, const char *interface, uint32_t version) {
+bool handle_global(struct nwl_easy *state, struct wl_registry *registry, uint32_t name, const char *interface, uint32_t version) {
 	struct wlpavuo_state *wlpstate = wl_container_of(state, wlpstate, nwl);
 	if (strcmp(wp_single_pixel_buffer_manager_v1_interface.name, interface) == 0) {
 		wlpstate->sp_buffer_manager = wl_registry_bind(registry, name, &wp_single_pixel_buffer_manager_v1_interface, 1);
@@ -210,7 +216,9 @@ int main (int argc, char *argv[]) {
 		.height = 640,
 		.mode = WLPAVUO_SURFACE_LAYER_MODE_LAYERSHELL,
 		.nwl = {
-			.xdg_app_id = "wlpavuoverlay",
+			.core = {
+				.xdg_app_id = "wlpavuoverlay",
+			},
 			.events.global_add = handle_global,
 		}
 	};
@@ -269,19 +277,19 @@ int main (int argc, char *argv[]) {
 			wlpstate.use_pipewire = true;
 		}
 	}
-	if (nwl_wayland_init(&wlpstate.nwl)) {
+	if (!nwl_easy_init(&wlpstate.nwl)) {
 		fprintf(stderr, "failed to init, bailing!\n");
 		return 1;
 	}
-	if (wlpstate.nwl.wl.compositor) {
-		if (wlpstate.nwl.wl.layer_shell == NULL) {
+	if (wlpstate.nwl.core.wl.compositor) {
+		if (wlpstate.nwl.core.wl.layer_shell == NULL) {
 			wlpstate.mode = WLPAVUO_SURFACE_LAYER_MODE_XDGSHELL;
 		}
 		create_surface(&wlpstate);
 	}
-	nwl_wayland_run(&wlpstate.nwl);
+	nwl_easy_run(&wlpstate.nwl);
 	if (wlpstate.stdin_input) {
-		nwl_poll_del_fd(&wlpstate.nwl, 0);
+		nwl_easy_del_fd(&wlpstate.nwl, 0);
 	}
 	if (wlpstate.sp_buffer_manager) {
 		wp_single_pixel_buffer_manager_v1_destroy(wlpstate.sp_buffer_manager);
@@ -289,6 +297,6 @@ int main (int argc, char *argv[]) {
 	if (wlpstate.viewporter) {
 		wp_viewporter_destroy(wlpstate.viewporter);
 	}
-	nwl_wayland_uninit(&wlpstate.nwl);
+	nwl_easy_deinit(&wlpstate.nwl);
 	return 0;
 }

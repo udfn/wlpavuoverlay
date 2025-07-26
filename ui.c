@@ -268,10 +268,11 @@ static void check_window_move(struct wlpavuo_surface *wlpsurface, struct nk_cont
 void wlpavuo_ui_destroy(struct nwl_surface *surface) {
 	struct wlpavuo_surface *wlpsurface = wl_container_of(surface, wlpsurface, main_surface);
 	struct wlpavuo_ui *ui = wlpsurface->ui;
+	struct wlpavuo_state *state = state_from_core(surface->core);
 	if (ui->backend->iterate) {
-		nwl_poll_del_fd(surface->state, ui->backend->get_fd());
+		nwl_easy_del_fd(&state->nwl, ui->backend->get_fd());
 	} else {
-		nwl_poll_del_fd(surface->state, ui->evfd);
+		nwl_easy_del_fd(&state->nwl, ui->evfd);
 		close(ui->evfd);
 	}
 	ui->backend->uninit();
@@ -368,7 +369,7 @@ static void ui_select_item(struct wlpavuo_ui *ui, int dir) {
 	ui->input.scroll_to_selected = 1;
 }
 
-void wlpavuo_ui_input_stdin(struct nwl_state *state, uint32_t events, void *data) {
+void wlpavuo_ui_input_stdin(struct nwl_easy *state, uint32_t events, void *data) {
 	struct wlpavuo_surface *wlpsurface = data;
 	struct wlpavuo_ui *ui = wlpsurface->ui;
 	if (!ui) {
@@ -406,7 +407,7 @@ void wlpavuo_ui_input_stdin(struct nwl_state *state, uint32_t events, void *data
 				ui->input.mute_selected = 1;
 				break;
 			case 'q':
-				wlpsurface->main_surface.state->num_surfaces = 0;
+				wlpsurface->main_surface.core->num_surfaces = 0;
 				break;
 		}
 	}
@@ -458,7 +459,7 @@ void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_seat *sea
 	} else if (event->type == NWL_KEYBOARD_EVENT_KEYUP) {
 		switch (event->keysym) {
 			case XKB_KEY_Escape:
-				surface->state->num_surfaces = 0;
+				surface->core->num_surfaces = 0;
 				break;
 			case XKB_KEY_Shift_L:
 			case XKB_KEY_Shift_R:
@@ -512,7 +513,7 @@ void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_seat *seat
 
 static void maybe_update_size(struct wlpavuo_surface *surf) {
 	struct wlpavuo_ui *ui = surf->ui;
-	struct wlpavuo_state *state = wl_container_of(surf->main_surface.state, state, nwl);
+	struct wlpavuo_state *state = state_from_core(surf->main_surface.core);
 	if (state->dynamic_height) {
 		uint32_t new_height = 50;
 		if (surf->main_surface.states & NWL_SURFACE_STATE_CSD) {
@@ -537,7 +538,7 @@ static void maybe_update_size(struct wlpavuo_surface *surf) {
 	}
 }
 
-static void rerender_from_event(struct nwl_state *state, uint32_t events, void *data) {
+static void rerender_from_event(struct nwl_easy *state, uint32_t events, void *data) {
 	UNUSED(state);
 	UNUSED(events);
 	struct wlpavuo_surface *surf = data;
@@ -568,7 +569,7 @@ static void set_progress_unselected_color(struct nk_context *ctx) {
 	set_nk_color(&ctx->style.progress.cursor_active.data.color, 160, 160, 160, 195);
 }
 
-static void do_iterate(struct nwl_state *state, uint32_t events, void *data) {
+static void do_iterate(struct nwl_easy *state, uint32_t events, void *data) {
 	struct wlpavuo_ui *ui = data;
 	ui->backend->iterate();
 }
@@ -591,7 +592,7 @@ void wlpavuo_ui_run(struct wlpavuo_surface *wlpsurface) {
 		set_nk_color(&ui->color_table[NK_COLOR_WINDOW], 8,8,8,231);
 		nk_style_from_table(ui->context, ui->color_table);
 #ifdef HAVE_PIPEWIRE
-		struct wlpavuo_state *state = wl_container_of(surface->state, state, nwl);
+		struct wlpavuo_state *state = state_from_core(surface->core);
 		if (state->use_pipewire) {
 			ui->backend = wlpavuo_audio_get_pw();
 		} else
@@ -600,11 +601,11 @@ void wlpavuo_ui_run(struct wlpavuo_surface *wlpsurface) {
 			ui->backend = wlpavuo_audio_get_pa();
 		}
 		if (ui->backend->iterate) {
-			nwl_poll_add_fd(surface->state, ui->backend->get_fd(), EPOLLIN, do_iterate, ui);
+			nwl_easy_add_fd(&state->nwl, ui->backend->get_fd(), EPOLLIN, do_iterate, ui);
 			ui->backend->set_update_callback(handle_audio_update_singlethread, wlpsurface);
 		} else {
 			ui->evfd = eventfd(0, 0);
-			nwl_poll_add_fd(surface->state, ui->evfd, EPOLLIN, rerender_from_event, wlpsurface);
+			nwl_easy_add_fd(&state->nwl, ui->evfd, EPOLLIN, rerender_from_event, wlpsurface);
 			ui->backend->set_update_callback(handle_audio_update, wlpsurface);
 		}
 	}
@@ -649,7 +650,7 @@ void wlpavuo_ui_run(struct wlpavuo_surface *wlpsurface) {
 			snprintf(buf,255,"Failed connecting to %s :(", aimpl->get_name());
 			nk_label(ctx,buf, NK_TEXT_ALIGN_CENTERED);
 			if (nk_button_label(ctx, "Quit")) {
-				surface->state->num_surfaces = 0;
+				surface->core->num_surfaces = 0;
 			}
 		} else if (status == WLPAVUO_AUDIO_STATUS_READY) {
 			struct wl_list *sinks = aimpl->get_sinks();

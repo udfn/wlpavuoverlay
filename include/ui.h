@@ -3,6 +3,7 @@
 #include <nwl/nwl.h>
 #include <nwl/surface.h>
 #include <nwl/cairo.h>
+
 struct wlpavuo_surface {
 	struct nwl_surface main_surface;
 	struct nwl_surface bg_surface;
@@ -29,13 +30,15 @@ struct wlpavuo_state {
 	bool dynamic_height;
 	char mode;
 	uint32_t anchor;
-	struct nwl_state nwl;
+	struct nwl_easy nwl;
 	struct wlpavuo_surface surface;
 };
 
+struct wlpavuo_state *state_from_core(struct nwl_core *core);
+
 void wlpavuo_ui_input_pointer(struct nwl_surface *surface, struct nwl_seat *seat, struct nwl_pointer_event *event);
 void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_seat *seat, struct nwl_keyboard_event *event);
-void wlpavuo_ui_input_stdin(struct nwl_state *state, uint32_t events, void *data);
+void wlpavuo_ui_input_stdin(struct nwl_easy *state, uint32_t events, void *data);
 void wlpavuo_ui_run(struct wlpavuo_surface *wlpsurface);
 void wlpavuo_ui_destroy(struct nwl_surface *surface);
 
