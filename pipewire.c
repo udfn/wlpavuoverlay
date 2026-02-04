@@ -2,6 +2,7 @@
 #include <pipewire/pipewire.h>
 // Pulse is only included here for volume conversion purposes
 #include <pulse/pulseaudio.h>
+#include <spa/pod/iter.h>
 #include <spa/pod/parser.h>
 #include <spa/pod/builder.h>
 #include <spa/param/props.h>

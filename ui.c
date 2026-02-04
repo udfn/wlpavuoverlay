@@ -45,7 +45,8 @@ struct wlpavuo_ui {
 		int selected;
 		char mute_selected;
 		char scroll_to_selected;
-		char num_shifts;
+		char bigger_volume_step;
+		char adjust_all_volumes;
 		char adjusting_volume;
 	} input;
 	const struct wlpavuo_audio_impl *backend;
@@ -423,7 +424,7 @@ void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_seat *sea
 	// This stuff shouldn't depend on the interface rendering..
 	// It should also be rebindable..
 	if (event->type == NWL_KEYBOARD_EVENT_KEYDOWN || event->type == NWL_KEYBOARD_EVENT_KEYREPEAT) {
-		int adjust_amount = ui->input.num_shifts ? 10000 : 2500;
+		int adjust_amount = ui->input.bigger_volume_step ? 10000 : 2500;
 		switch (event->keysym) {
 			case XKB_KEY_h:
 			case XKB_KEY_Left:
@@ -449,30 +450,22 @@ void wlpavuo_ui_input_keyboard(struct nwl_surface *surface, struct nwl_seat *sea
 			case XKB_KEY_M:
 				ui->input.mute_selected = 1;
 				break;
-			case XKB_KEY_Shift_L:
-			case XKB_KEY_Shift_R:
-				if (event->type == NWL_KEYBOARD_EVENT_KEYDOWN) {
-					ui->input.num_shifts++;
-				}
-				break;
+			default:break;
 		}
 	} else if (event->type == NWL_KEYBOARD_EVENT_KEYUP) {
 		switch (event->keysym) {
 			case XKB_KEY_Escape:
 				surface->core->num_surfaces = 0;
 				break;
-			case XKB_KEY_Shift_L:
-			case XKB_KEY_Shift_R:
-				if (ui->input.num_shifts > 0) {
-					ui->input.num_shifts--;
-				}
-				break;
+			default: break;
 
 		}
 	} else if (event->type == NWL_KEYBOARD_EVENT_FOCUS) {
-		ui->input.num_shifts = 0;
 		// This shouldn't be here, and maybe repeat should be on by default?
 		seat->keyboard_repeat_enabled = true;
+	} else if (event->type == NWL_KEYBOARD_EVENT_MODIFIERS) {
+		ui->input.adjust_all_volumes = xkb_state_mod_name_is_active(seat->keyboard_xkb.state, XKB_MOD_NAME_CTRL, XKB_STATE_MODS_EFFECTIVE);
+		ui->input.bigger_volume_step = xkb_state_mod_name_is_active(seat->keyboard_xkb.state, XKB_MOD_NAME_SHIFT, XKB_STATE_MODS_EFFECTIVE);
 	}
 	nwl_surface_set_need_update(surface, true);
 }
@@ -719,7 +712,14 @@ void wlpavuo_ui_run(struct wlpavuo_surface *wlpsurface) {
 						aimpl->set_stream_mute(stream, mutetmp ? 1 : 0);
 					}
 					if (voltmp != stream->volume) {
-						aimpl->set_stream_volume(stream, voltmp);
+						if (ui->input.adjust_all_volumes) {
+							struct wlpavuo_audio_client_stream *b_stream;
+							wl_list_for_each(b_stream, &client->streams, link) {
+								aimpl->set_stream_volume(b_stream, voltmp);
+							}
+						} else {
+							aimpl->set_stream_volume(stream, voltmp);
+						}
 					}
 					ctx->style.text.color = orig_text_color;
 					counter++;
